@@ -846,7 +846,7 @@ if "show_results" not in st.session_state:
 if "final_ai_text" not in st.session_state:
     st.session_state["final_ai_text"] = None
 
-st.title("🧭 Pathfinder")
+st.title("🧭 Bright Future")
 st.markdown(
     """
     ### Discover what could fit you — without forcing one narrow future
@@ -855,10 +855,10 @@ st.markdown(
     """
 )
 
-with st.expander("How to use Pathfinder"):
+with st.expander("How to use Bright Future"):
     st.markdown(
         """
-        **Pathfinder is not here to box you in.**
+        **Bright Future is not here to box you in.**
 
         It helps you:
         - spot patterns in what energises you
