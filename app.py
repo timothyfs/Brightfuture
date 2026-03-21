@@ -1,9 +1,10 @@
 import sqlite3
 import json
 from datetime import datetime
-import streamlit as st
-import pandas as pd
 import os
+
+import pandas as pd
+import streamlit as st
 from openai import OpenAI
 
 DB_PATH = os.getenv("DB_PATH", "/tmp/career_bot.db")
@@ -672,6 +673,7 @@ Important rules:
 - Keep the whole response compact, useful, and energising
 """
 
+
 def get_ai_interpretation(
     profile_name,
     age,
@@ -859,6 +861,9 @@ if "final_ai_text" not in st.session_state:
 if "deep_dive_text" not in st.session_state:
     st.session_state["deep_dive_text"] = None
 
+if "deep_dive_ready" not in st.session_state:
+    st.session_state["deep_dive_ready"] = False
+
 st.title("✨ Bright Future")
 st.subheader("Discover what could excite, challenge, and inspire your future")
 
@@ -960,6 +965,7 @@ if page == "Start discovery":
             st.session_state["roadmap_ready"] = False
             st.session_state["final_ai_text"] = None
             st.session_state["deep_dive_text"] = None
+            st.session_state["deep_dive_ready"] = False
             for key in [
                 "saved_profile_name",
                 "saved_profile_code",
@@ -1018,6 +1024,7 @@ if page == "Start discovery":
             st.session_state["roadmap_ready"] = False
             st.session_state["final_ai_text"] = None
             st.session_state["deep_dive_text"] = None
+            st.session_state["deep_dive_ready"] = False
 
             st.session_state["saved_profile_name"] = profile_name
             st.session_state["saved_profile_code"] = profile_code.lower().strip()
@@ -1104,47 +1111,40 @@ if page == "Start discovery":
                 {"Cluster": list(normalized_scores.keys()), "Fit %": list(normalized_scores.values())}
             ).sort_values("Fit %", ascending=False)
             st.bar_chart(score_df.set_index("Cluster"))
-            st.info("Before jumping to conclusions, explore what these paths actually feel like.")     
-            # ---------------------------
-            # 🔍 Deep Dive Exploration
-            # ---------------------------
 
-            if "deep_dive_ready" not in st.session_state:
-                st.session_state["deep_dive_ready"] = False
+            st.info("Before jumping to conclusions, explore what these paths actually feel like.")
 
             if st.button("🔍 Explore these paths deeper"):
                 st.session_state["deep_dive_ready"] = True
 
             if st.session_state["deep_dive_ready"]:
                 st.subheader("🔍 Explore before deciding")
-
                 st.write("Click into any path to understand what it's REALLY like.")
 
                 for cluster, score in top:
                     if st.button(f"Explore {cluster}", key=f"explore_{cluster}"):
-
                         deep_prompt = f"""
-            Explain what it is REALLY like to work in {cluster}.
+Explain what it is REALLY like to work in {cluster}.
 
-            Be honest, not idealistic.
+Be honest, not idealistic.
 
-            Include:
-            - what people actually do day-to-day
-            - what kind of people thrive here
-            - what might feel boring or difficult
-            - what makes it rewarding
+Include:
+- what people actually do day-to-day
+- what kind of people thrive here
+- what might feel boring or difficult
+- what makes it rewarding
 
-            Make it engaging and realistic for a teenager.
-            """
+Make it engaging and realistic for a teenager.
+"""
+                        try:
+                            response = client.responses.create(
+                                model="gpt-4.1-mini",
+                                input=deep_prompt,
+                            )
+                            st.write(response.output_text)
+                        except Exception as e:
+                            st.error(f"Deep dive failed: {e}")
 
-            try:
-                response = client.responses.create(
-                    model="gpt-4.1-mini",
-                    input=deep_prompt,
-                )
-                st.write(response.output_text)
-            except Exception as e:
-                st.error(f"Deep dive failed: {e}")
             st.markdown("## Compare with previous results")
             history_df = get_profile_history(st.session_state["saved_profile_code"])
             comparison = compare_latest_to_previous(history_df)
