@@ -7,7 +7,7 @@ import os
 from openai import OpenAI
 
 DB_PATH = os.getenv("DB_PATH", "/tmp/career_bot.db")
-OPENAI_API_KEY = st.secrets.get("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", None)
+OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY", None)
 client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
 
