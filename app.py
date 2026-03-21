@@ -426,6 +426,8 @@ def generate_study_advice(cluster, country):
     studies = CAREER_CLUSTERS[cluster]["studies"]
     universities = UNIVERSITY_DATA.get(country, {}).get(cluster, [])
     return studies, universities
+
+
 def build_ai_prompt(
     profile_name,
     age,
@@ -476,12 +478,13 @@ Please return your answer in the following sections:
 7. Caution against locking in too early
 
 Important rules:
-- Do not say “you should definitely become X”
+- Do not say "you should definitely become X"
 - Do not be overly rigid
 - Be practical, nuanced, and future-aware
 - Treat creative + analytical or creative + leadership combinations as potentially powerful hybrids
 - Keep the tone encouraging and grounded
 """
+
 
 def get_ai_interpretation(
     profile_name,
@@ -518,6 +521,7 @@ def get_ai_interpretation(
     except Exception as e:
         return f"AI interpretation failed: {e}"
 
+
 init_db()
 
 st.title("🧭 Pathfinder Career Discovery")
@@ -531,9 +535,12 @@ with st.expander("Read this first"):
         This should not be used to force an early decision.
 
         Use it to find **patterns** and test them in the real world.
-        The university suggestions are **starter ideas**, not definitive advice. Admissions rules, entry requirements, deadlines, and course availability move around, so any serious shortlist should be checked against official admissions sources before applying.
+        The university suggestions are **starter ideas**, not definitive advice.
         """
     )
+
+if client is None:
+    st.warning("AI interpretation is not active yet. Add OPENAI_API_KEY to Streamlit secrets to enable it.")
 
 page = st.sidebar.radio("Choose a section", ["Take an assessment", "View combined profile"])
 
@@ -608,8 +615,10 @@ if page == "Take an assessment":
                     now,
                 )
             )
+
             st.success("Assessment saved.")
             st.subheader("This assessment result")
+
             top = top_matches(normalized_scores)
             for cluster, score in top:
                 studies, universities = generate_study_advice(cluster, country_focus)
@@ -626,6 +635,21 @@ if page == "Take an assessment":
                 {"Cluster": list(normalized_scores.keys()), "Fit %": list(normalized_scores.values())}
             ).sort_values("Fit %", ascending=False)
             st.bar_chart(score_df.set_index("Cluster"))
+
+            st.subheader("AI interpretation")
+            with st.spinner("Generating AI interpretation..."):
+                ai_text = get_ai_interpretation(
+                    profile_name=profile_name,
+                    age=age,
+                    country_focus=country_focus,
+                    favourite_subjects=favourite_subjects,
+                    least_subjects=least_subjects,
+                    dream_day=dream_day,
+                    answers=answers,
+                    normalized_scores=normalized_scores,
+                    respondent_role=respondent_role,
+                )
+            st.write(ai_text)
 
 else:
     st.header("Combined profile view")
@@ -654,6 +678,7 @@ else:
                 raw_avg, norm_avg = aggregated
                 st.subheader("Combined best-fit profile")
                 top = top_matches(norm_avg)
+
                 for i, (cluster, score) in enumerate(top, start=1):
                     studies, universities = generate_study_advice(cluster, df.iloc[0]["country_focus"])
                     st.markdown(f"### {i}. {cluster} — {score}% fit")
@@ -670,6 +695,37 @@ else:
                     {"Cluster": list(norm_avg.keys()), "Fit %": list(norm_avg.values())}
                 ).sort_values("Fit %", ascending=False)
                 st.bar_chart(score_df.set_index("Cluster"))
+
+                st.subheader("AI interpretation of the combined profile")
+
+                combined_answers = {
+                    "note": "This is a combined multi-observer profile. Interpret the weighted score pattern and the open-text inputs from the saved records."
+                }
+
+                combined_favourites = " | ".join(
+                    [str(x) for x in df["favourite_subjects"].dropna().tolist() if str(x).strip()]
+                )
+                combined_least = " | ".join(
+                    [str(x) for x in df["least_favourite_subjects"].dropna().tolist() if str(x).strip()]
+                )
+                combined_dream_day = " | ".join(
+                    [str(x) for x in df["dream_day"].dropna().tolist() if str(x).strip()]
+                )
+
+                with st.spinner("Generating combined AI interpretation..."):
+                    ai_text = get_ai_interpretation(
+                        profile_name=df.iloc[0]["profile_name"],
+                        age=int(df.iloc[0]["target_age"]) if pd.notnull(df.iloc[0]["target_age"]) else 16,
+                        country_focus=df.iloc[0]["country_focus"],
+                        favourite_subjects=combined_favourites,
+                        least_subjects=combined_least,
+                        dream_day=combined_dream_day,
+                        answers=combined_answers,
+                        normalized_scores=norm_avg,
+                        respondent_role="Combined profile",
+                    )
+
+                st.write(ai_text)
 
                 st.subheader("What to do next")
                 st.markdown(
