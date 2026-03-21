@@ -15,7 +15,7 @@ def get_connection():
     return sqlite3.connect(DB_PATH, check_same_thread=False)
 
 
-st.set_page_config(page_title="Pathfinder Career Discovery", page_icon="🧭", layout="wide")
+st.set_page_config(page_title="Pathfinder", page_icon="🧭", layout="wide")
 
 CAREER_CLUSTERS = {
     "Engineering & Technology": {
@@ -584,9 +584,6 @@ For each direction include:
 - Why it may be stimulating over time
 - Why it is a serious and worthwhile path
 
-Make sure the options are thoughtful and not all conventional prestige jobs.
-If appropriate, include creative, technical, entrepreneurial, design, public-service, research, or hybrid paths.
-
 ## 4. Practical school roadmap
 Explain:
 - Which school subjects matter most now
@@ -633,7 +630,6 @@ Suggest useful extracurriculars such as:
 - personal projects
 
 Explain why these matter for this profile.
-Encourage the idea that interests outside school can become serious advantages later.
 
 ## 8. AI outlook for each direction
 For each career direction, provide:
@@ -659,8 +655,6 @@ Write a short section that reinforces:
 - seriousness, discipline, and ambition can exist in many fields
 - the goal is to find a path that matches talent, energy, curiosity, and long-term motivation
 
-This section should be thoughtful and reassuring.
-
 ## 10. Next 90 days
 Give 3 concrete actions the student can take now.
 
@@ -675,6 +669,7 @@ Important rules:
 - Keep the tone encouraging and grounded
 - Make the student feel possibility, not pressure
 """
+
 
 def get_ai_interpretation(
     profile_name,
@@ -776,43 +771,7 @@ Rules:
         return fallback_questions
     except Exception:
         return fallback_questions
-def build_report_text():
-    if not st.session_state.get("show_results"):
-        return ""
 
-    profile_name = st.session_state.get("saved_profile_name", "Student")
-    age = st.session_state.get("saved_age", "")
-    country_focus = st.session_state.get("saved_country_focus", "")
-    favourite_subjects = st.session_state.get("saved_favourite_subjects", "")
-    least_subjects = st.session_state.get("saved_least_subjects", "")
-    dream_day = st.session_state.get("saved_dream_day", "")
-    normalized_scores = st.session_state.get("saved_normalized_scores", {})
-    final_ai_text = st.session_state.get("final_ai_text", "")
-
-    top = top_matches(normalized_scores)
-
-    lines = []
-    lines.append(f"# Career Roadmap Report: {profile_name}")
-    lines.append("")
-    lines.append(f"**Age:** {age}")
-    lines.append(f"**Country focus:** {country_focus}")
-    lines.append("")
-    lines.append("## Snapshot")
-    lines.append(f"- Favourite subjects: {favourite_subjects}")
-    lines.append(f"- Least favourite subjects: {least_subjects}")
-    lines.append(f"- Ideal working day: {dream_day}")
-    lines.append("")
-
-    lines.append("## Top fit areas")
-    for cluster, score in top:
-        lines.append(f"- **{cluster}** — {score}%")
-    lines.append("")
-
-    lines.append("## Career roadmap")
-    lines.append(final_ai_text if final_ai_text else "_AI roadmap not generated yet._")
-    lines.append("")
-
-    return "\n".join(lines)
 
 init_db()
 
@@ -822,18 +781,29 @@ if "show_results" not in st.session_state:
 if "final_ai_text" not in st.session_state:
     st.session_state["final_ai_text"] = None
 
-st.title("🧭 Pathfinder Career Discovery")
-st.write(
-    "A repeatable discovery app for teenagers. It combines self-assessment with parent, teacher, or trusted-friend observations, then maps the result to career clusters, study directions, and a first-pass university shortlist."
+st.title("🧭 Pathfinder")
+st.markdown(
+    """
+    ### Discover what could fit you — without forcing one narrow future
+
+    This tool helps you explore your strengths, interests, and working style, then turns that into practical ideas for studies, careers, and next steps.
+    """
 )
 
-with st.expander("Read this first"):
+with st.expander("How to use Pathfinder"):
     st.markdown(
         """
-        This should not be used to force an early decision.
+        **Pathfinder is not here to box you in.**
 
-        Use it to find **patterns** and test them in the real world.
-        The university suggestions are **starter ideas**, not definitive advice.
+        It helps you:
+        - spot patterns in what energises you
+        - explore realistic and stimulating future directions
+        - think about studies, internships, and skills to build
+        - understand how AI may change different career paths
+
+        The goal is not to choose your whole life today.
+
+        The goal is to get clearer, step by step.
         """
     )
 
@@ -842,8 +812,21 @@ if client is None:
 
 page = st.sidebar.radio("Choose a section", ["Take an assessment", "View combined profile"])
 
+st.sidebar.markdown("---")
+st.sidebar.markdown("### What this is for")
+st.sidebar.markdown(
+    """
+    Pathfinder helps students:
+    - understand themselves better
+    - explore possible futures
+    - build confidence without pressure
+    """
+)
+
 if page == "Take an assessment":
-    st.header("New assessment")
+    st.progress(25, text="Step 1 of 4 — Build your starting profile")
+    st.header("Discover your starting profile")
+
     col1, col2, col3 = st.columns(3)
     with col1:
         profile_name = st.text_input("Teen profile name", placeholder="e.g. Emma Smith")
@@ -873,7 +856,7 @@ if page == "Take an assessment":
         help="Higher = greater influence when combining multiple responses. Self should usually be highest.",
     )
 
-    st.subheader("Rate the statements")
+    st.subheader("Tell us how this person tends to think and work")
     st.caption("1 = strongly disagree, 5 = strongly agree")
     answers = {}
     qcols = st.columns(2)
@@ -881,7 +864,7 @@ if page == "Take an assessment":
         with qcols[idx % 2]:
             answers[q["key"]] = st.slider(q["label"], 1, 5, 3, key=f"{respondent_role}_{q['key']}_{idx}")
 
-    st.subheader("Open reflection")
+    st.subheader("A little more context")
     favourite_subjects = st.text_input("Favourite subjects", placeholder="e.g. Maths, Biology, Art")
     least_subjects = st.text_input("Least favourite subjects", placeholder="e.g. Chemistry, History")
     dream_day = st.text_area(
@@ -891,9 +874,9 @@ if page == "Take an assessment":
 
     col_a, col_b = st.columns([3, 1])
     with col_a:
-        save_clicked = st.button("Save assessment and show results", type="primary")
+        save_clicked = st.button("Show first-fit profile", type="primary")
     with col_b:
-        if st.button("Reset current assessment"):
+        if st.button("Reset"):
             st.session_state["show_results"] = False
             st.session_state["final_ai_text"] = None
             for key in [
@@ -966,10 +949,16 @@ if page == "Take an assessment":
         normalized_scores = st.session_state["saved_normalized_scores"]
         saved_answers = st.session_state["saved_answers"]
 
-        st.success("Assessment saved.")
-        st.subheader("This assessment result")
+        st.progress(50, text="Step 2 of 4 — Review your first-fit profile")
+        st.success("Profile created.")
+        st.markdown("## Your first-fit profile")
 
         top = top_matches(normalized_scores)
+        metric_cols = st.columns(len(top))
+        for i, (cluster, score) in enumerate(top):
+            with metric_cols[i]:
+                st.metric(label=cluster, value=f"{score}%")
+
         for cluster, score in top:
             studies, universities = generate_study_advice(cluster, st.session_state["saved_country_focus"])
             st.markdown(f"### {cluster} — {score}%")
@@ -986,7 +975,10 @@ if page == "Take an assessment":
         ).sort_values("Fit %", ascending=False)
         st.bar_chart(score_df.set_index("Cluster"))
 
-        st.markdown("### Step 2: Answer these AI follow-up questions")
+        st.progress(75, text="Step 3 of 4 — Go deeper with follow-up questions")
+        st.markdown("## Questions to sharpen the picture")
+        st.info("These questions help uncover what really motivates you — not just what sounds good on paper.")
+
         followup_questions = get_ai_followup_questions(
             profile_name=st.session_state["saved_profile_name"],
             age=st.session_state["saved_age"],
@@ -1005,7 +997,10 @@ if page == "Take an assessment":
                 key=f"followup_{st.session_state['saved_profile_code']}_{i}",
             )
 
-        st.markdown("### Step 3: Generate your full career roadmap")
+        st.progress(100, text="Step 4 of 4 — Build your future roadmap")
+        st.markdown("## Build your future roadmap")
+        st.success("You’ve done the hard part. Now let’s turn your profile into a practical and inspiring plan.")
+
         if st.button("Generate full career roadmap", key="generate_ai"):
             with st.spinner("Generating AI interpretation..."):
                 ai_text = get_ai_interpretation(
@@ -1025,16 +1020,6 @@ if page == "Take an assessment":
         if st.session_state.get("final_ai_text"):
             st.markdown("## Your career roadmap")
             st.write(st.session_state["final_ai_text"])
-
-            report_text = build_report_text()
-
-            st.markdown("### Download report")
-            st.download_button(
-            "Download career roadmap report",
-            data=report_text,
-            file_name=f"{st.session_state['saved_profile_code']}_career_roadmap.md",
-            mime="text/markdown",
-        )
 
 else:
     st.header("Combined profile view")
