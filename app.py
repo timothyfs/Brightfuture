@@ -552,15 +552,83 @@ Top cluster scores:
 All normalized scores:
 {json.dumps(normalized_scores, indent=2)}
 
-Please return your answer in the following sections:
+Please return your answer using the exact section headings below.
 
-1. Core profile summary
-2. Strongest signals
-3. Tensions or contradictions worth noting
-4. Best-fit study directions
-5. Adjacent or hybrid future-ready paths
-6. Real-world experiments to try next
-7. Caution against locking in too early
+## 1. Core profile summary
+Summarise the student's likely strengths, motivations, working style, and what seems to energise them.
+
+## 2. Best-fit stimulating career directions
+Give 3 to 5 career directions, not just one job.
+For each direction include:
+- Why it fits
+- Example roles
+- Why it may be stimulating over time
+
+## 3. Practical school roadmap
+Explain:
+- Which school subjects matter most now
+- Which academic strengths to build now
+- Which bac specialities or school profile may make sense where relevant
+- What level of academic ambition to aim for
+- Give practical guidance on marks and performance bands to target, but do not pretend exact admissions cutoffs are guaranteed
+
+If the country focus is France:
+- Refer naturally to lycée, spécialités and baccalauréat where relevant
+- Be realistic and practical
+- Do not invent fake official thresholds
+
+## 4. Higher education routes to explore
+Suggest realistic higher-education paths relevant to the country focus.
+Include different route types where relevant, such as:
+- university
+- BUT / BTS
+- prépa
+- grande école
+- design school
+- specialist school
+- apprenticeships or work-linked routes where relevant
+
+Also include example institutions to explore, making clear they are examples, not guarantees.
+
+## 5. Internships and real-world exposure
+Suggest the kinds of organisations, companies, studios, labs, institutions, NGOs, public bodies, or sectors the student should try to explore.
+Give examples of internship, shadowing, volunteering, or project environments that match the profile.
+
+## 6. Skills to build outside school
+Suggest useful extracurriculars such as:
+- sports
+- creative work
+- competitions
+- clubs
+- coding projects
+- portfolio work
+- volunteering
+- public speaking
+- teamwork
+- personal projects
+
+Explain why these matter for this profile.
+
+## 7. AI outlook for each direction
+For each career direction, provide:
+- AI replacement risk score from 1 to 10
+- AI enablement value score from 1 to 10
+- A short explanation of how AI is likely to change the field
+- A short explanation of how learning AI tools could strengthen the student's future performance in that field
+
+Scoring guidance:
+- 1 = very low
+- 10 = very high
+- High replacement risk means more routine parts of the field may be automated
+- High enablement value means strong professionals in the field will benefit significantly from learning to use AI well
+
+Important:
+- Do NOT present AI as simple replacement
+- Show where AI is a tool, amplifier, co-pilot, or productivity layer
+- Be balanced and realistic
+
+## 8. Next 90 days
+Give 3 concrete actions the student can take now.
 
 Important rules:
 - Do not say "you should definitely become X"
@@ -572,7 +640,6 @@ Important rules:
 - Treat creative + analytical or creative + leadership combinations as potentially powerful hybrids
 - Keep the tone encouraging and grounded
 """
-
 
 def get_ai_interpretation(
     profile_name,
@@ -867,8 +934,8 @@ if page == "Take an assessment":
                 key=f"followup_{st.session_state['saved_profile_code']}_{i}",
             )
 
-        st.markdown("### Step 3: Generate your final AI profile")
-        if st.button("Generate final AI profile", key="generate_ai"):
+        st.markdown("### Step 3: Generate your full career roadmap")
+        if st.button("Generate full career roadmap", key="generate_ai"):
             with st.spinner("Generating AI interpretation..."):
                 ai_text = get_ai_interpretation(
                     profile_name=st.session_state["saved_profile_name"],
