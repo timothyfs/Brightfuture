@@ -19,7 +19,6 @@ else:
 def get_connection():
     return sqlite3.connect(DB_PATH, check_same_thread=False)
 
-
 st.set_page_config(page_title="Pathfinder Career Discovery", page_icon="🧭", layout="wide")
 
 CAREER_CLUSTERS = {
@@ -159,25 +158,38 @@ QUESTIONS = [
     {
         "key": "organising",
         "label": "I enjoy organising tasks, planning ahead, and keeping things on track.",
-        "weights": {"Operations, Finance & Project Delivery": 3, "Business, Law & Leadership": 1},
+        "weights": {
+            "Operations, Finance & Project Delivery": 3,
+            "Business, Law & Leadership": 1,
+        },
         "type": "ability",
     },
     {
         "key": "independent",
         "label": "I work well independently and can stay focused without much supervision.",
-        "weights": {"Research & Analysis": 2, "Engineering & Technology": 2, "Creative & Design": 1},
+        "weights": {
+            "Research & Analysis": 2,
+            "Engineering & Technology": 2,
+            "Creative & Design": 1,
+        },
         "type": "style",
     },
     {
         "key": "team_energy",
         "label": "I get energy from teamwork, interaction, and being around people.",
-        "weights": {"Business, Law & Leadership": 2, "People, Health & Education": 2},
+        "weights": {
+            "Business, Law & Leadership": 2,
+            "People, Health & Education": 2,
+        },
         "type": "style",
     },
     {
         "key": "building",
         "label": "I like building, fixing, making, or understanding how things work.",
-        "weights": {"Engineering & Technology": 3, "Operations, Finance & Project Delivery": 1},
+        "weights": {
+            "Engineering & Technology": 3,
+            "Operations, Finance & Project Delivery": 1,
+        },
         "type": "energy",
     },
     {
@@ -193,19 +205,28 @@ QUESTIONS = [
     {
         "key": "stability",
         "label": "A stable and predictable career matters a lot to me.",
-        "weights": {"Operations, Finance & Project Delivery": 2, "People, Health & Education": 2},
+        "weights": {
+            "Operations, Finance & Project Delivery": 2,
+            "People, Health & Education": 2,
+        },
         "type": "values",
     },
     {
         "key": "achievement",
         "label": "I am strongly motivated by achievement, leadership, or standing out.",
-        "weights": {"Business, Law & Leadership": 3, "Creative & Design": 1},
+        "weights": {
+            "Business, Law & Leadership": 2,
+            "Creative & Design": 1,
+        },
         "type": "values",
     },
     {
         "key": "precision",
         "label": "I am comfortable with details and usually catch mistakes others miss.",
-        "weights": {"Operations, Finance & Project Delivery": 3, "Research & Analysis": 1},
+        "weights": {
+            "Operations, Finance & Project Delivery": 3,
+            "Research & Analysis": 1,
+        },
         "type": "ability",
     },
     {
@@ -213,7 +234,7 @@ QUESTIONS = [
         "label": "I like big ideas, theories, and conceptual thinking.",
         "weights": {
             "Research & Analysis": 2,
-            "Creative & Design": 1,
+            "Creative & Design": 2,
             "Business, Law & Leadership": 1,
         },
         "type": "style",
