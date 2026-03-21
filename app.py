@@ -670,7 +670,19 @@ if page == "Take an assessment":
         if not profile_name or not profile_code:
             st.error("Add a profile name and profile code first.")
         else:
-            raw_scores, normalized_scores = score_answers(answers)
+            raw_scores, _ = score_answers(answers)
+            raw_scores = apply_context_boost(
+                raw_scores,
+                favourite_subjects=favourite_subjects,
+                least_subjects=least_subjects,
+                dream_day=dream_day,
+            )
+
+            max_score = max(raw_scores.values()) if raw_scores else 1
+            normalized_scores = {
+                k: round((v / max_score) * 100, 1) if max_score else 0
+                for k, v in raw_scores.items()
+            }
             now = datetime.utcnow().isoformat(timespec="seconds")
             save_assessment(
                 (
