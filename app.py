@@ -671,6 +671,7 @@ Important rules:
 - Treat creative + analytical or creative + leadership combinations as potentially powerful hybrids
 - Keep the whole response compact, useful, and energising
 """
+
 def get_ai_interpretation(
     profile_name,
     age,
