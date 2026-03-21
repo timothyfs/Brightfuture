@@ -15,7 +15,7 @@ def get_connection():
     return sqlite3.connect(DB_PATH, check_same_thread=False)
 
 
-st.set_page_config(page_title="Bright Future", page_icon="🧭", layout="wide")
+st.set_page_config(page_title="Pathfinder", page_icon="🧭", layout="wide")
 
 CAREER_CLUSTERS = {
     "Engineering & Technology": {
@@ -403,6 +403,71 @@ def load_assessments(profile_code):
         return pd.DataFrame()
 
 
+def get_profile_history(profile_code):
+    df = load_assessments(profile_code)
+    if df.empty:
+        return df
+
+    df = df.copy()
+    df["created_at_dt"] = pd.to_datetime(df["created_at"], errors="coerce")
+    df = df.sort_values("created_at_dt")
+    return df
+
+
+def compare_latest_to_previous(df):
+    if df.empty or len(df) < 2:
+        return None
+
+    df = df.copy().sort_values("created_at")
+    latest = df.iloc[-1]
+    previous = df.iloc[-2]
+
+    latest_scores = json.loads(latest["normalized_scores"])
+    previous_scores = json.loads(previous["normalized_scores"])
+
+    comparison_rows = []
+    for cluster in CAREER_CLUSTERS.keys():
+        latest_val = float(latest_scores.get(cluster, 0))
+        previous_val = float(previous_scores.get(cluster, 0))
+        delta = round(latest_val - previous_val, 1)
+        comparison_rows.append(
+            {
+                "Cluster": cluster,
+                "Previous %": previous_val,
+                "Latest %": latest_val,
+                "Change": delta,
+            }
+        )
+
+    comp_df = pd.DataFrame(comparison_rows).sort_values("Latest %", ascending=False)
+    return {
+        "latest_date": latest["created_at"],
+        "previous_date": previous["created_at"],
+        "comparison_df": comp_df,
+    }
+
+
+def build_history_chart_df(df):
+    if df.empty:
+        return pd.DataFrame()
+
+    rows = []
+    df = df.copy().sort_values("created_at")
+
+    for _, row in df.iterrows():
+        scores = json.loads(row["normalized_scores"])
+        for cluster, score in scores.items():
+            rows.append(
+                {
+                    "created_at": row["created_at"],
+                    "Cluster": cluster,
+                    "Fit %": score,
+                }
+            )
+
+    return pd.DataFrame(rows)
+
+
 def score_answers(answers):
     raw = {k: 0 for k in CAREER_CLUSTERS}
     for q in QUESTIONS:
@@ -781,7 +846,7 @@ if "show_results" not in st.session_state:
 if "final_ai_text" not in st.session_state:
     st.session_state["final_ai_text"] = None
 
-st.title("🧭 Bright Future")
+st.title("🧭 Pathfinder")
 st.markdown(
     """
     ### Discover what could fit you — without forcing one narrow future
@@ -790,10 +855,10 @@ st.markdown(
     """
 )
 
-with st.expander("How to use Bright Future"):
+with st.expander("How to use Pathfinder"):
     st.markdown(
         """
-        **Bright Future is not here to box you in.**
+        **Pathfinder is not here to box you in.**
 
         It helps you:
         - spot patterns in what energises you
@@ -816,7 +881,7 @@ st.sidebar.markdown("---")
 st.sidebar.markdown("### What this is for")
 st.sidebar.markdown(
     """
-    Bright Future helps students:
+    Pathfinder helps students:
     - understand themselves better
     - explore possible futures
     - build confidence without pressure
@@ -975,6 +1040,41 @@ if page == "Take an assessment":
         ).sort_values("Fit %", ascending=False)
         st.bar_chart(score_df.set_index("Cluster"))
 
+        st.markdown("## Compare with previous results")
+
+        history_df = get_profile_history(st.session_state["saved_profile_code"])
+        comparison = compare_latest_to_previous(history_df)
+
+        if comparison is None:
+            st.info("No previous saved result yet for this profile. Save another run later to compare changes over time.")
+        else:
+            st.write(
+                f"Comparing latest result from **{comparison['latest_date']}** "
+                f"with previous result from **{comparison['previous_date']}**"
+            )
+
+            comp_df = comparison["comparison_df"]
+
+            metric_cols = st.columns(3)
+            top_current = comp_df.iloc[0]
+            with metric_cols[0]:
+                st.metric("Top current fit", top_current["Cluster"], f"{top_current['Latest %']}%")
+
+            biggest_rise = comp_df.sort_values("Change", ascending=False).iloc[0]
+            with metric_cols[1]:
+                st.metric("Biggest rise", biggest_rise["Cluster"], f"{biggest_rise['Change']:+.1f}")
+
+            biggest_drop = comp_df.sort_values("Change", ascending=True).iloc[0]
+            with metric_cols[2]:
+                st.metric("Biggest drop", biggest_drop["Cluster"], f"{biggest_drop['Change']:+.1f}")
+
+            st.dataframe(comp_df, use_container_width=True)
+
+            history_chart_df = build_history_chart_df(history_df)
+            if not history_chart_df.empty:
+                pivot_df = history_chart_df.pivot(index="created_at", columns="Cluster", values="Fit %")
+                st.line_chart(pivot_df)
+
         st.progress(75, text="Step 3 of 4 — Go deeper with follow-up questions")
         st.markdown("## Questions to sharpen the picture")
         st.info("These questions help uncover what really motivates you — not just what sounds good on paper.")
@@ -1066,6 +1166,25 @@ else:
                     {"Cluster": list(norm_avg.keys()), "Fit %": list(norm_avg.values())}
                 ).sort_values("Fit %", ascending=False)
                 st.bar_chart(score_df.set_index("Cluster"))
+
+                st.subheader("History and comparison")
+
+                history_df = get_profile_history(profile_code_lookup.lower().strip())
+                comparison = compare_latest_to_previous(history_df)
+
+                if comparison is None:
+                    st.info("No previous saved run yet for this profile.")
+                else:
+                    st.write(
+                        f"Comparing latest result from **{comparison['latest_date']}** "
+                        f"with previous result from **{comparison['previous_date']}**"
+                    )
+                    st.dataframe(comparison["comparison_df"], use_container_width=True)
+
+                history_chart_df = build_history_chart_df(history_df)
+                if not history_chart_df.empty:
+                    pivot_df = history_chart_df.pivot(index="created_at", columns="Cluster", values="Fit %")
+                    st.line_chart(pivot_df)
 
                 st.subheader("AI interpretation of the combined profile")
 
