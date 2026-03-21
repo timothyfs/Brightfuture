@@ -736,15 +736,78 @@ if page == "Take an assessment":
                     normalized_scores=normalized_scores,
                     respondent_role=respondent_role,
                 )
-            st.write(ai_text)
+                def get_ai_followup_questions(
+                    profile_name,
+                    age,
+                    country_focus,
+                    favourite_subjects,
+                    least_subjects,
+                    dream_day,
+                    answers,
+                    normalized_scores,
+                ):
+                    if client is None:
+                        return [
+                            "What kind of activities make you lose track of time?",
+                            "Do you prefer creating something new, solving a problem, or helping someone?",
+                            "What school tasks feel most natural to you?",
+                            "What kind of people or environments energise you most?",
+                            "If nobody judged you, what would you be most excited to explore?"
+                    ]
 
-else:
-    st.header("Combined profile view")
-    profile_code_lookup = st.text_input("Enter profile code", placeholder="e.g. emma-2026")
-    if profile_code_lookup:
-        df = load_assessments(profile_code_lookup.lower().strip())
-        if df.empty:
-            st.warning("No assessments found for that profile code yet.")
+                    prompt = f"""
+                You are helping a teenager explore career direction.
+
+                Based on this profile, generate 5 smart follow-up questions that will help clarify:
+                - true interests vs surface interests
+                - working style
+                - people vs systems orientation
+                - creative identity
+                - appetite for leadership, structure, and uncertainty
+
+                Profile:
+                - Name: {profile_name}
+                - Age: {age}
+                - Country focus: {country_focus}
+                - Favourite subjects: {favourite_subjects}
+                - Least favourite subjects: {least_subjects}
+                - Dream day: {dream_day}
+                - Answers: {json.dumps(answers)}
+                - Scores: {json.dumps(normalized_scores)}
+
+                Rules:
+                - Ask exactly 5 questions
+                - Questions should be short, clear, and teenager-friendly
+                - Avoid corporate language
+                - Avoid deterministic phrasing
+                - Focus on surfacing personality, motivation, and preferences
+                Return the result as a JSON list of strings.
+                """
+
+                    try:
+                        response = client.responses.create(
+                            model="gpt-4.1-mini",
+                            input=prompt,
+                        )
+                        text = response.output_text.strip()
+                        return json.loads(text)
+                    except Exception:
+                        return [
+                            "What kind of activities make you lose track of time?",
+                            "Do you prefer creating something new, solving a problem, or helping someone?",
+                            "What school tasks feel most natural to you?",
+                            "What kind of people or environments energise you most?",
+                            "If nobody judged you, what would you be most excited to explore?"
+                        ]
+                            st.write(ai_text)               
+
+    else:
+        st.header("Combined profile view")
+        profile_code_lookup = st.text_input("Enter profile code", placeholder="e.g. emma-2026")
+        if profile_code_lookup:
+            df = load_assessments(profile_code_lookup.lower().strip())
+            if df.empty:
+                st.warning("No assessments found for that profile code yet.")
         else:
             st.subheader("Responses on file")
             view_df = df[
