@@ -15,7 +15,7 @@ def get_connection():
     return sqlite3.connect(DB_PATH, check_same_thread=False)
 
 
-st.set_page_config(page_title="Pathfinder", page_icon="🧭", layout="wide")
+st.set_page_config(page_title="Bright Future", page_icon="🧭", layout="wide")
 
 CAREER_CLUSTERS = {
     "Engineering & Technology": {
@@ -781,7 +781,7 @@ if "show_results" not in st.session_state:
 if "final_ai_text" not in st.session_state:
     st.session_state["final_ai_text"] = None
 
-st.title("🧭 Pathfinder")
+st.title("🧭 Bright Future")
 st.markdown(
     """
     ### Discover what could fit you — without forcing one narrow future
@@ -790,10 +790,10 @@ st.markdown(
     """
 )
 
-with st.expander("How to use Pathfinder"):
+with st.expander("How to use Bright Future"):
     st.markdown(
         """
-        **Pathfinder is not here to box you in.**
+        **Bright Future is not here to box you in.**
 
         It helps you:
         - spot patterns in what energises you
@@ -816,7 +816,7 @@ st.sidebar.markdown("---")
 st.sidebar.markdown("### What this is for")
 st.sidebar.markdown(
     """
-    Pathfinder helps students:
+    Bright Future helps students:
     - understand themselves better
     - explore possible futures
     - build confidence without pressure
