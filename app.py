@@ -846,7 +846,20 @@ if "show_results" not in st.session_state:
 if "final_ai_text" not in st.session_state:
     st.session_state["final_ai_text"] = None
 
+<<<<<<< HEAD
+if "followup_ready" not in st.session_state:
+    st.session_state["followup_ready"] = False
+
+if "roadmap_ready" not in st.session_state:
+    st.session_state["roadmap_ready"] = False
+
+if "deep_dive_text" not in st.session_state:
+    st.session_state["deep_dive_text"] = None
+
+st.title("🧭 Pathfinder")
+=======
 st.title("🧭 Bright Future")
+>>>>>>> cad23b9e4095c99d4853f6e6335c649e1b604f48
 st.markdown(
     """
     ### Discover what could fit you — without forcing one narrow future
@@ -943,7 +956,11 @@ if page == "Take an assessment":
     with col_b:
         if st.button("Reset"):
             st.session_state["show_results"] = False
+            st.session_state["followup_ready"] = False
+            st.session_state["roadmap_ready"] = False
             st.session_state["final_ai_text"] = None
+            st.session_state["deep_dive_text"] = None
+
             for key in [
                 "saved_profile_name",
                 "saved_profile_code",
@@ -957,9 +974,10 @@ if page == "Take an assessment":
                 "saved_respondent_role",
             ]:
                 st.session_state.pop(key, None)
+
             st.rerun()
 
-    if save_clicked:
+        if save_clicked:
         if not profile_name or not profile_code:
             st.error("Add a profile name and profile code first.")
         else:
@@ -998,7 +1016,11 @@ if page == "Take an assessment":
             )
 
             st.session_state["show_results"] = True
+            st.session_state["followup_ready"] = True
+            st.session_state["roadmap_ready"] = False
             st.session_state["final_ai_text"] = None
+            st.session_state["deep_dive_text"] = None
+
             st.session_state["saved_profile_name"] = profile_name
             st.session_state["saved_profile_code"] = profile_code.lower().strip()
             st.session_state["saved_age"] = age
@@ -1010,116 +1032,136 @@ if page == "Take an assessment":
             st.session_state["saved_normalized_scores"] = normalized_scores
             st.session_state["saved_respondent_role"] = respondent_role
 
-    if st.session_state.get("show_results"):
+        if st.session_state.get("show_results"):
         normalized_scores = st.session_state["saved_normalized_scores"]
         saved_answers = st.session_state["saved_answers"]
 
-        st.progress(50, text="Step 2 of 4 — Review your first-fit profile")
-        st.success("Profile created.")
-        st.markdown("## Your first-fit profile")
-
-        top = top_matches(normalized_scores)
-        metric_cols = st.columns(len(top))
-        for i, (cluster, score) in enumerate(top):
-            with metric_cols[i]:
-                st.metric(label=cluster, value=f"{score}%")
-
-        for cluster, score in top:
-            studies, universities = generate_study_advice(cluster, st.session_state["saved_country_focus"])
-            st.markdown(f"### {cluster} — {score}%")
-            st.write(CAREER_CLUSTERS[cluster]["description"])
-            st.write("Suggested further studies: " + ", ".join(studies[:5]))
-            if universities:
-                st.write("Starter university ideas: " + ", ".join(universities[:4]))
-            st.write("Try next:")
-            for act in CAREER_CLUSTERS[cluster]["activities"]:
-                st.write(f"- {act}")
-
-        score_df = pd.DataFrame(
-            {"Cluster": list(normalized_scores.keys()), "Fit %": list(normalized_scores.values())}
-        ).sort_values("Fit %", ascending=False)
-        st.bar_chart(score_df.set_index("Cluster"))
-
-        st.markdown("## Compare with previous results")
-
-        history_df = get_profile_history(st.session_state["saved_profile_code"])
-        comparison = compare_latest_to_previous(history_df)
-
-        if comparison is None:
-            st.info("No previous saved result yet for this profile. Save another run later to compare changes over time.")
-        else:
-            st.write(
-                f"Comparing latest result from **{comparison['latest_date']}** "
-                f"with previous result from **{comparison['previous_date']}**"
+        if st.session_state.get("followup_ready") and not st.session_state.get("roadmap_ready"):
+            st.progress(60, text="Step 2 of 4 — Refine your profile")
+            st.success("Great start. You’ve already revealed some strong signals.")
+            st.info(
+                "Now let’s go a bit deeper before revealing your full Bright Future roadmap."
             )
 
-            comp_df = comparison["comparison_df"]
-
-            metric_cols = st.columns(3)
-            top_current = comp_df.iloc[0]
-            with metric_cols[0]:
-                st.metric("Top current fit", top_current["Cluster"], f"{top_current['Latest %']}%")
-
-            biggest_rise = comp_df.sort_values("Change", ascending=False).iloc[0]
-            with metric_cols[1]:
-                st.metric("Biggest rise", biggest_rise["Cluster"], f"{biggest_rise['Change']:+.1f}")
-
-            biggest_drop = comp_df.sort_values("Change", ascending=True).iloc[0]
-            with metric_cols[2]:
-                st.metric("Biggest drop", biggest_drop["Cluster"], f"{biggest_drop['Change']:+.1f}")
-
-            st.dataframe(comp_df, use_container_width=True)
-
-            history_chart_df = build_history_chart_df(history_df)
-            if not history_chart_df.empty:
-                pivot_df = history_chart_df.pivot(index="created_at", columns="Cluster", values="Fit %")
-                st.line_chart(pivot_df)
-
-        st.progress(75, text="Step 3 of 4 — Go deeper with follow-up questions")
-        st.markdown("## Questions to sharpen the picture")
-        st.info("These questions help uncover what really motivates you — not just what sounds good on paper.")
-
-        followup_questions = get_ai_followup_questions(
-            profile_name=st.session_state["saved_profile_name"],
-            age=st.session_state["saved_age"],
-            country_focus=st.session_state["saved_country_focus"],
-            favourite_subjects=st.session_state["saved_favourite_subjects"],
-            least_subjects=st.session_state["saved_least_subjects"],
-            dream_day=st.session_state["saved_dream_day"],
-            answers=saved_answers,
-            normalized_scores=normalized_scores,
-        )
-
-        followup_answers = {}
-        for i, question in enumerate(followup_questions, start=1):
-            followup_answers[f"q{i}"] = st.text_area(
-                f"{i}. {question}",
-                key=f"followup_{st.session_state['saved_profile_code']}_{i}",
+            st.markdown("## Level up your profile")
+            followup_questions = get_ai_followup_questions(
+                profile_name=st.session_state["saved_profile_name"],
+                age=st.session_state["saved_age"],
+                country_focus=st.session_state["saved_country_focus"],
+                favourite_subjects=st.session_state["saved_favourite_subjects"],
+                least_subjects=st.session_state["saved_least_subjects"],
+                dream_day=st.session_state["saved_dream_day"],
+                answers=saved_answers,
+                normalized_scores=normalized_scores,
             )
 
-        st.progress(100, text="Step 4 of 4 — Build your future roadmap")
-        st.markdown("## Build your future roadmap")
-        st.success("You’ve done the hard part. Now let’s turn your profile into a practical and inspiring plan.")
-
-        if st.button("Generate full career roadmap", key="generate_ai"):
-            with st.spinner("Generating AI interpretation..."):
-                ai_text = get_ai_interpretation(
-                    profile_name=st.session_state["saved_profile_name"],
-                    age=st.session_state["saved_age"],
-                    country_focus=st.session_state["saved_country_focus"],
-                    favourite_subjects=st.session_state["saved_favourite_subjects"],
-                    least_subjects=st.session_state["saved_least_subjects"],
-                    dream_day=st.session_state["saved_dream_day"],
-                    answers=saved_answers,
-                    normalized_scores=normalized_scores,
-                    respondent_role=st.session_state["saved_respondent_role"],
-                    followup_answers=followup_answers,
+            followup_answers = {}
+            for i, question in enumerate(followup_questions, start=1):
+                followup_answers[f"q{i}"] = st.text_area(
+                    f"{i}. {question}",
+                    key=f"followup_{st.session_state['saved_profile_code']}_{i}",
                 )
-            st.session_state["final_ai_text"] = ai_text
 
-        if st.session_state.get("final_ai_text"):
-            st.markdown("## Your career roadmap")
-            st.write(st.session_state["final_ai_text"])
+            if st.button("Reveal my Bright Future", key="generate_ai"):
+                with st.spinner("Building your roadmap..."):
+                    ai_text = get_ai_interpretation(
+                        profile_name=st.session_state["saved_profile_name"],
+                        age=st.session_state["saved_age"],
+                        country_focus=st.session_state["saved_country_focus"],
+                        favourite_subjects=st.session_state["saved_favourite_subjects"],
+                        least_subjects=st.session_state["saved_least_subjects"],
+                        dream_day=st.session_state["saved_dream_day"],
+                        answers=saved_answers,
+                        normalized_scores=normalized_scores,
+                        respondent_role=st.session_state["saved_respondent_role"],
+                        followup_answers=followup_answers,
+                    )
+                st.session_state["final_ai_text"] = ai_text
+                st.session_state["roadmap_ready"] = True
+                st.session_state["followup_ready"] = False
+                st.rerun()
+
+        if st.session_state.get("roadmap_ready"):
+            st.progress(100, text="Step 3 of 4 — Your Bright Future reveal")
+            st.markdown("## 🌟 Your Bright Future")
+
+            top = top_matches(normalized_scores)
+            metric_cols = st.columns(len(top))
+            for i, (cluster, score) in enumerate(top):
+                with metric_cols[i]:
+                    st.metric(label=cluster, value=f"{score}%")
+
+            st.markdown("### What your aptitude profile suggests")
+            for cluster, score in top:
+                studies, universities = generate_study_advice(cluster, st.session_state["saved_country_focus"])
+                st.markdown(f"**{cluster} — {score}%**")
+                st.write(CAREER_CLUSTERS[cluster]["description"])
+                st.write("Suggested further studies: " + ", ".join(studies[:5]))
+                if universities:
+                    st.write("Starter university ideas: " + ", ".join(universities[:4]))
+
+            score_df = pd.DataFrame(
+                {"Cluster": list(normalized_scores.keys()), "Fit %": list(normalized_scores.values())}
+            ).sort_values("Fit %", ascending=False)
+            st.bar_chart(score_df.set_index("Cluster"))
+
+            history_df = get_profile_history(st.session_state["saved_profile_code"])
+            comparison = compare_latest_to_previous(history_df)
+
+            st.markdown("## Compare with previous results")
+            if comparison is None:
+                st.info("No previous saved result yet for this profile. Save another run later to compare changes over time.")
+            else:
+                st.write(
+                    f"Comparing latest result from **{comparison['latest_date']}** "
+                    f"with previous result from **{comparison['previous_date']}**"
+                )
+                st.dataframe(comparison["comparison_df"], use_container_width=True)
+
+                history_chart_df = build_history_chart_df(history_df)
+                if not history_chart_df.empty:
+                    pivot_df = history_chart_df.pivot(index="created_at", columns="Cluster", values="Fit %")
+                    st.line_chart(pivot_df)
+
+            if st.session_state.get("final_ai_text"):
+                st.markdown("## Your integrated roadmap")
+                st.write(st.session_state["final_ai_text"])
+
+                st.markdown("## Explore this result further")
+                deep_dive_topic = st.selectbox(
+                    "Choose a topic",
+                    [
+                        "Why this profile fits",
+                        "Best subjects to focus on",
+                        "Higher education options",
+                        "Internship and real-world exposure ideas",
+                        "Skills to build outside school",
+                        "How AI may affect these career directions",
+                        "What to improve over the next year",
+                        "How to choose between two possible paths",
+                    ],
+                    key="deep_dive_topic",
+                )
+
+                if st.button("Explore this topic", key="explore_topic"):
+                    with st.spinner("Exploring this topic..."):
+                        deep_dive_text = get_ai_deep_dive(
+                            topic=deep_dive_topic,
+                            profile_name=st.session_state["saved_profile_name"],
+                            age=st.session_state["saved_age"],
+                            country_focus=st.session_state["saved_country_focus"],
+                            favourite_subjects=st.session_state["saved_favourite_subjects"],
+                            least_subjects=st.session_state["saved_least_subjects"],
+                            dream_day=st.session_state["saved_dream_day"],
+                            answers=st.session_state["saved_answers"],
+                            normalized_scores=st.session_state["saved_normalized_scores"],
+                            final_ai_text=st.session_state["final_ai_text"],
+                        )
+                    st.session_state["deep_dive_text"] = deep_dive_text
+
+                if st.session_state.get("deep_dive_text"):
+                    st.markdown(f"### Deep dive: {deep_dive_topic}")
+                    st.write(st.session_state["deep_dive_text"])
 
 else:
     st.header("Combined profile view")
