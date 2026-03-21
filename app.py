@@ -10,14 +10,10 @@ DB_PATH = os.getenv("DB_PATH", "/tmp/career_bot.db")
 OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY", None)
 client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
-# 👇 ADD DEBUG HERE
-if OPENAI_API_KEY:
-    st.write("✅ API key loaded from Streamlit secrets")
-else:
-    st.write("❌ No API key found in Streamlit secrets")
 
 def get_connection():
     return sqlite3.connect(DB_PATH, check_same_thread=False)
+
 
 st.set_page_config(page_title="Pathfinder Career Discovery", page_icon="🧭", layout="wide")
 
@@ -140,7 +136,17 @@ QUESTIONS = [
     {
         "key": "design",
         "label": "I enjoy designing, imagining, writing, or creating original things.",
-        "weights": {"Creative & Design": 3, "Business, Law & Leadership": 1},
+        "weights": {
+            "Creative & Design": 4,
+        },
+        "type": "energy",
+    },
+    {
+        "key": "visual_creativity",
+        "label": "I care a lot about aesthetics, visual style, and how things look and feel.",
+        "weights": {
+            "Creative & Design": 4,
+        },
         "type": "energy",
     },
     {
@@ -152,7 +158,7 @@ QUESTIONS = [
     {
         "key": "persuasion",
         "label": "I like presenting, persuading, debating, or influencing people.",
-        "weights": {"Business, Law & Leadership": 3, "Creative & Design": 1},
+        "weights": {"Business, Law & Leadership": 2, "Creative & Design": 1},
         "type": "energy",
     },
     {
@@ -410,6 +416,7 @@ def score_answers(answers):
     normalized = {k: round((v / max_score) * 100, 1) if max_score else 0 for k, v in raw.items()}
     return raw, normalized
 
+
 def apply_context_boost(raw_scores, favourite_subjects, least_subjects, dream_day):
     positive_text = f"{favourite_subjects} {dream_day}".lower()
     negative_text = f"{least_subjects}".lower()
@@ -417,7 +424,8 @@ def apply_context_boost(raw_scores, favourite_subjects, least_subjects, dream_da
     positive_keywords = {
         "Creative & Design": [
             "art", "design", "drawing", "fashion", "media", "photography",
-            "film", "writing", "creative", "architecture", "music", "drama"
+            "film", "writing", "creative", "architecture", "music", "drama",
+            "illustration", "animation", "theatre"
         ],
         "Engineering & Technology": [
             "math", "physics", "coding", "computer", "engineering",
@@ -459,6 +467,7 @@ def apply_context_boost(raw_scores, favourite_subjects, least_subjects, dream_da
         raw_scores[cluster] -= matches * 1.5
 
     return raw_scores
+
 
 def aggregate_scores(df):
     if df.empty:
@@ -513,6 +522,7 @@ def build_ai_prompt(
     answers,
     normalized_scores,
     respondent_role=None,
+    followup_answers=None,
 ):
     top_clusters = top_matches(normalized_scores, n=3)
 
@@ -536,6 +546,9 @@ Structured inputs:
 Question responses:
 {json.dumps(answers, indent=2)}
 
+Follow-up interview answers:
+{json.dumps(followup_answers or {}, indent=2)}
+
 Top cluster scores:
 {json.dumps(top_clusters, indent=2)}
 
@@ -556,6 +569,9 @@ Important rules:
 - Do not say "you should definitely become X"
 - Do not be overly rigid
 - Be practical, nuanced, and future-aware
+- Be specific and concrete
+- Avoid generic career advice
+- If creative signals are strong, do not default to business or law unless clearly dominant
 - Treat creative + analytical or creative + leadership combinations as potentially powerful hybrids
 - Keep the tone encouraging and grounded
 """
@@ -571,6 +587,7 @@ def get_ai_interpretation(
     answers,
     normalized_scores,
     respondent_role=None,
+    followup_answers=None,
 ):
     if client is None:
         return "AI interpretation is not available because no OPENAI_API_KEY is configured in Streamlit secrets."
@@ -585,6 +602,7 @@ def get_ai_interpretation(
         answers=answers,
         normalized_scores=normalized_scores,
         respondent_role=respondent_role,
+        followup_answers=followup_answers,
     )
 
     try:
@@ -595,6 +613,70 @@ def get_ai_interpretation(
         return response.output_text
     except Exception as e:
         return f"AI interpretation failed: {e}"
+
+
+def get_ai_followup_questions(
+    profile_name,
+    age,
+    country_focus,
+    favourite_subjects,
+    least_subjects,
+    dream_day,
+    answers,
+    normalized_scores,
+):
+    fallback_questions = [
+        "What kinds of activities make you lose track of time?",
+        "Do you prefer creating something new, solving a problem, or helping someone?",
+        "What school tasks feel most natural to you?",
+        "What kind of people or environments energise you most?",
+        "If nobody judged you, what would you be most excited to explore next?",
+    ]
+
+    if client is None:
+        return fallback_questions
+
+    prompt = f"""
+You are helping a teenager explore future study and career direction.
+
+Based on this profile, generate exactly 5 smart follow-up questions that will help clarify:
+- true interests vs surface interests
+- working style
+- people vs systems orientation
+- creative identity
+- appetite for leadership, structure, and uncertainty
+
+Profile:
+- Name: {profile_name}
+- Age: {age}
+- Country focus: {country_focus}
+- Favourite subjects: {favourite_subjects}
+- Least favourite subjects: {least_subjects}
+- Dream day: {dream_day}
+- Answers: {json.dumps(answers)}
+- Scores: {json.dumps(normalized_scores)}
+
+Rules:
+- Ask exactly 5 questions
+- Questions should be short, clear, and teenager-friendly
+- Avoid corporate language
+- Avoid deterministic phrasing
+- Focus on surfacing personality, motivation, and preferences
+- Return only a valid JSON list of 5 strings
+"""
+
+    try:
+        response = client.responses.create(
+            model="gpt-4.1-mini",
+            input=prompt,
+        )
+        text = response.output_text.strip()
+        questions = json.loads(text)
+        if isinstance(questions, list) and len(questions) == 5:
+            return questions
+        return fallback_questions
+    except Exception:
+        return fallback_questions
 
 
 init_db()
@@ -683,6 +765,7 @@ if page == "Take an assessment":
                 k: round((v / max_score) * 100, 1) if max_score else 0
                 for k, v in raw_scores.items()
             }
+
             now = datetime.utcnow().isoformat(timespec="seconds")
             save_assessment(
                 (
@@ -723,91 +806,50 @@ if page == "Take an assessment":
             ).sort_values("Fit %", ascending=False)
             st.bar_chart(score_df.set_index("Cluster"))
 
-            st.subheader("AI interpretation")
-            with st.spinner("Generating AI interpretation..."):
-                ai_text = get_ai_interpretation(
-                    profile_name=profile_name,
-                    age=age,
-                    country_focus=country_focus,
-                    favourite_subjects=favourite_subjects,
-                    least_subjects=least_subjects,
-                    dream_day=dream_day,
-                    answers=answers,
-                    normalized_scores=normalized_scores,
-                    respondent_role=respondent_role,
+            st.subheader("AI follow-up questions")
+            followup_questions = get_ai_followup_questions(
+                profile_name=profile_name,
+                age=age,
+                country_focus=country_focus,
+                favourite_subjects=favourite_subjects,
+                least_subjects=least_subjects,
+                dream_day=dream_day,
+                answers=answers,
+                normalized_scores=normalized_scores,
+            )
+
+            followup_answers = {}
+            for i, question in enumerate(followup_questions, start=1):
+                followup_answers[f"q{i}"] = st.text_area(
+                    f"{i}. {question}",
+                    key=f"followup_{profile_code}_{i}",
                 )
-                def get_ai_followup_questions(
-                    profile_name,
-                    age,
-                    country_focus,
-                    favourite_subjects,
-                    least_subjects,
-                    dream_day,
-                    answers,
-                    normalized_scores,
-                ):
-                    if client is None:
-                        return [
-                            "What kind of activities make you lose track of time?",
-                            "Do you prefer creating something new, solving a problem, or helping someone?",
-                            "What school tasks feel most natural to you?",
-                            "What kind of people or environments energise you most?",
-                            "If nobody judged you, what would you be most excited to explore?"
-                    ]
 
-                    prompt = f"""
-                You are helping a teenager explore career direction.
+            st.subheader("AI interpretation")
+            if st.button("Generate AI interpretation", key="generate_ai_interpretation"):
+                with st.spinner("Generating AI interpretation..."):
+                    ai_text = get_ai_interpretation(
+                        profile_name=profile_name,
+                        age=age,
+                        country_focus=country_focus,
+                        favourite_subjects=favourite_subjects,
+                        least_subjects=least_subjects,
+                        dream_day=dream_day,
+                        answers=answers,
+                        normalized_scores=normalized_scores,
+                        respondent_role=respondent_role,
+                        followup_answers=followup_answers,
+                    )
+                st.write(ai_text)
 
-                Based on this profile, generate 5 smart follow-up questions that will help clarify:
-                - true interests vs surface interests
-                - working style
-                - people vs systems orientation
-                - creative identity
-                - appetite for leadership, structure, and uncertainty
+else:
+    st.header("Combined profile view")
+    profile_code_lookup = st.text_input("Enter profile code", placeholder="e.g. emma-2026")
 
-                Profile:
-                - Name: {profile_name}
-                - Age: {age}
-                - Country focus: {country_focus}
-                - Favourite subjects: {favourite_subjects}
-                - Least favourite subjects: {least_subjects}
-                - Dream day: {dream_day}
-                - Answers: {json.dumps(answers)}
-                - Scores: {json.dumps(normalized_scores)}
-
-                Rules:
-                - Ask exactly 5 questions
-                - Questions should be short, clear, and teenager-friendly
-                - Avoid corporate language
-                - Avoid deterministic phrasing
-                - Focus on surfacing personality, motivation, and preferences
-                Return the result as a JSON list of strings.
-                """
-
-                    try:
-                        response = client.responses.create(
-                            model="gpt-4.1-mini",
-                            input=prompt,
-                        )
-                        text = response.output_text.strip()
-                        return json.loads(text)
-                    except Exception:
-                        return [
-                            "What kind of activities make you lose track of time?",
-                            "Do you prefer creating something new, solving a problem, or helping someone?",
-                            "What school tasks feel most natural to you?",
-                            "What kind of people or environments energise you most?",
-                            "If nobody judged you, what would you be most excited to explore?"
-                        ]
-                            st.write(ai_text)               
-
-    else:
-        st.header("Combined profile view")
-        profile_code_lookup = st.text_input("Enter profile code", placeholder="e.g. emma-2026")
-        if profile_code_lookup:
-            df = load_assessments(profile_code_lookup.lower().strip())
-            if df.empty:
-                st.warning("No assessments found for that profile code yet.")
+    if profile_code_lookup:
+        df = load_assessments(profile_code_lookup.lower().strip())
+        if df.empty:
+            st.warning("No assessments found for that profile code yet.")
         else:
             st.subheader("Responses on file")
             view_df = df[
@@ -862,20 +904,21 @@ if page == "Take an assessment":
                     [str(x) for x in df["dream_day"].dropna().tolist() if str(x).strip()]
                 )
 
-                with st.spinner("Generating combined AI interpretation..."):
-                    ai_text = get_ai_interpretation(
-                        profile_name=df.iloc[0]["profile_name"],
-                        age=int(df.iloc[0]["target_age"]) if pd.notnull(df.iloc[0]["target_age"]) else 16,
-                        country_focus=df.iloc[0]["country_focus"],
-                        favourite_subjects=combined_favourites,
-                        least_subjects=combined_least,
-                        dream_day=combined_dream_day,
-                        answers=combined_answers,
-                        normalized_scores=norm_avg,
-                        respondent_role="Combined profile",
-                    )
-
-                st.write(ai_text)
+                if st.button("Generate combined AI interpretation", key="generate_combined_ai"):
+                    with st.spinner("Generating combined AI interpretation..."):
+                        ai_text = get_ai_interpretation(
+                            profile_name=df.iloc[0]["profile_name"],
+                            age=int(df.iloc[0]["target_age"]) if pd.notnull(df.iloc[0]["target_age"]) else 16,
+                            country_focus=df.iloc[0]["country_focus"],
+                            favourite_subjects=combined_favourites,
+                            least_subjects=combined_least,
+                            dream_day=combined_dream_day,
+                            answers=combined_answers,
+                            normalized_scores=norm_avg,
+                            respondent_role="Combined profile",
+                            followup_answers=None,
+                        )
+                    st.write(ai_text)
 
                 st.subheader("What to do next")
                 st.markdown(
