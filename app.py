@@ -4,8 +4,11 @@ from datetime import datetime
 import streamlit as st
 import pandas as pd
 import os
+from openai import OpenAI
 
 DB_PATH = os.getenv("DB_PATH", "/tmp/career_bot.db")
+OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY", None)
+client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
 
 def get_connection():
@@ -423,7 +426,97 @@ def generate_study_advice(cluster, country):
     studies = CAREER_CLUSTERS[cluster]["studies"]
     universities = UNIVERSITY_DATA.get(country, {}).get(cluster, [])
     return studies, universities
+def build_ai_prompt(
+    profile_name,
+    age,
+    country_focus,
+    favourite_subjects,
+    least_subjects,
+    dream_day,
+    answers,
+    normalized_scores,
+    respondent_role=None,
+):
+    top_clusters = top_matches(normalized_scores, n=3)
 
+    return f"""
+You are a thoughtful, future-aware career discovery adviser for teenagers.
+
+Your job is NOT to give deterministic career advice.
+Your job is to interpret patterns, explain tensions, and suggest promising directions to explore.
+
+Profile:
+- Name: {profile_name}
+- Age: {age}
+- Country focus for studies: {country_focus}
+- Respondent role: {respondent_role or "Unknown"}
+
+Structured inputs:
+- Favourite subjects: {favourite_subjects}
+- Least favourite subjects: {least_subjects}
+- Ideal working day: {dream_day}
+
+Question responses:
+{json.dumps(answers, indent=2)}
+
+Top cluster scores:
+{json.dumps(top_clusters, indent=2)}
+
+All normalized scores:
+{json.dumps(normalized_scores, indent=2)}
+
+Please return your answer in the following sections:
+
+1. Core profile summary
+2. Strongest signals
+3. Tensions or contradictions worth noting
+4. Best-fit study directions
+5. Adjacent or hybrid future-ready paths
+6. Real-world experiments to try next
+7. Caution against locking in too early
+
+Important rules:
+- Do not say “you should definitely become X”
+- Do not be overly rigid
+- Be practical, nuanced, and future-aware
+- Treat creative + analytical or creative + leadership combinations as potentially powerful hybrids
+- Keep the tone encouraging and grounded
+"""
+
+def get_ai_interpretation(
+    profile_name,
+    age,
+    country_focus,
+    favourite_subjects,
+    least_subjects,
+    dream_day,
+    answers,
+    normalized_scores,
+    respondent_role=None,
+):
+    if client is None:
+        return "AI interpretation is not available because no OPENAI_API_KEY is configured in Streamlit secrets."
+
+    prompt = build_ai_prompt(
+        profile_name=profile_name,
+        age=age,
+        country_focus=country_focus,
+        favourite_subjects=favourite_subjects,
+        least_subjects=least_subjects,
+        dream_day=dream_day,
+        answers=answers,
+        normalized_scores=normalized_scores,
+        respondent_role=respondent_role,
+    )
+
+    try:
+        response = client.responses.create(
+            model="gpt-4.1-mini",
+            input=prompt,
+        )
+        return response.output_text
+    except Exception as e:
+        return f"AI interpretation failed: {e}"
 
 init_db()
 
