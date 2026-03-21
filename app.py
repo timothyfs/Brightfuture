@@ -864,6 +864,9 @@ if "deep_dive_text" not in st.session_state:
 if "deep_dive_ready" not in st.session_state:
     st.session_state["deep_dive_ready"] = False
 
+if "active_country_focus" not in st.session_state:
+    st.session_state["active_country_focus"] = "France"
+
 st.title("✨ Bright Future")
 st.subheader("Discover what could excite, challenge, and inspire your future")
 
@@ -966,6 +969,7 @@ if page == "Start discovery":
             st.session_state["final_ai_text"] = None
             st.session_state["deep_dive_text"] = None
             st.session_state["deep_dive_ready"] = False
+            st.session_state["active_country_focus"] = "France"
             for key in [
                 "saved_profile_name",
                 "saved_profile_code",
@@ -1030,6 +1034,7 @@ if page == "Start discovery":
             st.session_state["saved_profile_code"] = profile_code.lower().strip()
             st.session_state["saved_age"] = age
             st.session_state["saved_country_focus"] = country_focus
+            st.session_state["active_country_focus"] = country_focus
             st.session_state["saved_favourite_subjects"] = favourite_subjects
             st.session_state["saved_least_subjects"] = least_subjects
             st.session_state["saved_dream_day"] = dream_day
@@ -1050,7 +1055,7 @@ if page == "Start discovery":
             followup_questions = get_ai_followup_questions(
                 profile_name=st.session_state["saved_profile_name"],
                 age=st.session_state["saved_age"],
-                country_focus=st.session_state["saved_country_focus"],
+                country_focus=st.session_state["active_country_focus"],
                 favourite_subjects=st.session_state["saved_favourite_subjects"],
                 least_subjects=st.session_state["saved_least_subjects"],
                 dream_day=st.session_state["saved_dream_day"],
@@ -1070,7 +1075,7 @@ if page == "Start discovery":
                     ai_text = get_ai_interpretation(
                         profile_name=st.session_state["saved_profile_name"],
                         age=st.session_state["saved_age"],
-                        country_focus=st.session_state["saved_country_focus"],
+                        country_focus=st.session_state["active_country_focus"],
                         favourite_subjects=st.session_state["saved_favourite_subjects"],
                         least_subjects=st.session_state["saved_least_subjects"],
                         dream_day=st.session_state["saved_dream_day"],
@@ -1087,6 +1092,21 @@ if page == "Start discovery":
         if st.session_state.get("roadmap_ready"):
             st.progress(100, text="Step 3 of 4 — Your Bright Future reveal")
             st.markdown("## 🌟 Your Bright Future")
+            st.markdown("### Explore this profile in a different country")
+
+            selected_country = st.selectbox(
+                "Study destination",
+                ["France", "UK", "Switzerland"],
+                index=["France", "UK", "Switzerland"].index(st.session_state["active_country_focus"]),
+                key="results_country_switcher",
+            )
+            country_changed = selected_country != st.session_state["active_country_focus"]
+            st.session_state["active_country_focus"] = selected_country
+
+            if country_changed:
+                st.session_state["final_ai_text"] = None
+                st.session_state["deep_dive_text"] = None
+
             st.write(
                 "This is your current best-fit direction based on how you think, what you enjoy, "
                 "and what seems to energise you most."
@@ -1100,7 +1120,7 @@ if page == "Start discovery":
 
             st.markdown("### What your aptitude profile suggests")
             for cluster, score in top:
-                studies, universities = generate_study_advice(cluster, st.session_state["saved_country_focus"])
+                studies, universities = generate_study_advice(cluster, st.session_state["active_country_focus"])
                 st.markdown(f"**{cluster} — {score}%**")
                 st.write(CAREER_CLUSTERS[cluster]["description"])
                 st.write("Suggested further studies: " + ", ".join(studies[:5]))
@@ -1163,6 +1183,25 @@ Make it engaging and realistic for a teenager.
                     pivot_df = history_chart_df.pivot(index="created_at", columns="Cluster", values="Fit %")
                     st.line_chart(pivot_df)
 
+            if not st.session_state.get("final_ai_text"):
+                st.info("Country changed. Click below to regenerate the roadmap for this country.")
+
+            if st.button("Generate roadmap for selected country", key="regenerate_country_ai"):
+                with st.spinner("Building your roadmap..."):
+                    ai_text = get_ai_interpretation(
+                        profile_name=st.session_state["saved_profile_name"],
+                        age=st.session_state["saved_age"],
+                        country_focus=st.session_state["active_country_focus"],
+                        favourite_subjects=st.session_state["saved_favourite_subjects"],
+                        least_subjects=st.session_state["saved_least_subjects"],
+                        dream_day=st.session_state["saved_dream_day"],
+                        answers=st.session_state["saved_answers"],
+                        normalized_scores=st.session_state["saved_normalized_scores"],
+                        respondent_role=st.session_state["saved_respondent_role"],
+                        followup_answers=None,
+                    )
+                st.session_state["final_ai_text"] = ai_text
+
             if st.session_state.get("final_ai_text"):
                 st.markdown("## Your integrated roadmap")
                 st.write(st.session_state["final_ai_text"])
@@ -1191,7 +1230,7 @@ Make it engaging and realistic for a teenager.
                             topic=deep_dive_topic,
                             profile_name=st.session_state["saved_profile_name"],
                             age=st.session_state["saved_age"],
-                            country_focus=st.session_state["saved_country_focus"],
+                            country_focus=st.session_state["active_country_focus"],
                             favourite_subjects=st.session_state["saved_favourite_subjects"],
                             least_subjects=st.session_state["saved_least_subjects"],
                             dream_day=st.session_state["saved_dream_day"],
