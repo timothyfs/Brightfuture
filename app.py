@@ -1103,7 +1103,47 @@ if page == "Start discovery":
                 {"Cluster": list(normalized_scores.keys()), "Fit %": list(normalized_scores.values())}
             ).sort_values("Fit %", ascending=False)
             st.bar_chart(score_df.set_index("Cluster"))
+       st.info("Before jumping to conclusions, explore what these paths actually feel like.")     
+# ---------------------------
+# 🔍 Deep Dive Exploration
+# ---------------------------
 
+if "deep_dive_ready" not in st.session_state:
+    st.session_state["deep_dive_ready"] = False
+
+if st.button("🔍 Explore these paths deeper"):
+    st.session_state["deep_dive_ready"] = True
+
+if st.session_state["deep_dive_ready"]:
+    st.subheader("🔍 Explore before deciding")
+
+    st.write("Click into any path to understand what it's REALLY like.")
+
+    for cluster, score in top:
+        if st.button(f"Explore {cluster}", key=f"explore_{cluster}"):
+
+            deep_prompt = f"""
+Explain what it is REALLY like to work in {cluster}.
+
+Be honest, not idealistic.
+
+Include:
+- what people actually do day-to-day
+- what kind of people thrive here
+- what might feel boring or difficult
+- what makes it rewarding
+
+Make it engaging and realistic for a teenager.
+"""
+
+            try:
+                response = client.responses.create(
+                    model="gpt-4.1-mini",
+                    input=deep_prompt,
+                )
+                st.write(response.output_text)
+            except Exception as e:
+                st.error(f"Deep dive failed: {e}")
             st.markdown("## Compare with previous results")
             history_df = get_profile_history(st.session_state["saved_profile_code"])
             comparison = compare_latest_to_previous(history_df)
