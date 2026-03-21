@@ -10,6 +10,11 @@ DB_PATH = os.getenv("DB_PATH", "/tmp/career_bot.db")
 OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY", None)
 client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
+# 👇 ADD DEBUG HERE
+if OPENAI_API_KEY:
+    st.write("✅ API key loaded from Streamlit secrets")
+else:
+    st.write("❌ No API key found in Streamlit secrets")
 
 def get_connection():
     return sqlite3.connect(DB_PATH, check_same_thread=False)
