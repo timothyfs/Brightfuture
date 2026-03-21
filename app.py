@@ -15,7 +15,7 @@ def get_connection():
     return sqlite3.connect(DB_PATH, check_same_thread=False)
 
 
-st.set_page_config(page_title="Bright Future", page_icon="🧭", layout="wide")
+st.set_page_config(page_title="Bright Future", page_icon="✨", layout="wide")
 
 CAREER_CLUSTERS = {
     "Engineering & Technology": {
@@ -136,17 +136,13 @@ QUESTIONS = [
     {
         "key": "design",
         "label": "I enjoy designing, imagining, writing, or creating original things.",
-        "weights": {
-            "Creative & Design": 4,
-        },
+        "weights": {"Creative & Design": 4},
         "type": "energy",
     },
     {
         "key": "visual_creativity",
         "label": "I care a lot about aesthetics, visual style, and how things look and feel.",
-        "weights": {
-            "Creative & Design": 4,
-        },
+        "weights": {"Creative & Design": 4},
         "type": "energy",
     },
     {
@@ -407,7 +403,6 @@ def get_profile_history(profile_code):
     df = load_assessments(profile_code)
     if df.empty:
         return df
-
     df = df.copy()
     df["created_at_dt"] = pd.to_datetime(df["created_at"], errors="coerce")
     df = df.sort_values("created_at_dt")
@@ -487,27 +482,27 @@ def apply_context_boost(raw_scores, favourite_subjects, least_subjects, dream_da
         "Creative & Design": [
             "art", "design", "drawing", "fashion", "media", "photography",
             "film", "writing", "creative", "architecture", "music", "drama",
-            "illustration", "animation", "theatre"
+            "illustration", "animation", "theatre",
         ],
         "Engineering & Technology": [
             "math", "physics", "coding", "computer", "engineering",
-            "robotics", "technology", "mechanical", "software"
+            "robotics", "technology", "mechanical", "software",
         ],
         "Research & Analysis": [
             "economics", "science", "research", "analysis", "data",
-            "history", "politics", "geography"
+            "history", "politics", "geography",
         ],
         "People, Health & Education": [
             "biology", "psychology", "teaching", "helping", "health",
-            "medicine", "children", "care"
+            "medicine", "children", "care",
         ],
         "Business, Law & Leadership": [
             "business", "law", "debate", "leadership", "entrepreneurship",
-            "management", "public speaking"
+            "management", "public speaking",
         ],
         "Operations, Finance & Project Delivery": [
             "finance", "accounting", "organisation", "planning",
-            "project", "logistics", "spreadsheet"
+            "project", "logistics", "spreadsheet",
         ],
     }
 
@@ -604,6 +599,10 @@ You are NOT allowed to sound elitist, rigid, snobbish, or deterministic.
 You must NOT imply that only traditional prestige careers matter.
 You must NOT frame success as “doctor, lawyer, engineer or failure.”
 You must recognise that meaningful, stimulating, respected careers can exist in many forms.
+
+The aptitude results are the foundation of the analysis.
+Use the score pattern as the primary structure, then use the follow-up answers to confirm, refine, or challenge the initial picture.
+When the aptitude results and follow-up answers point in different directions, explain the tension clearly instead of forcing a simplistic answer.
 
 Profile:
 - Name: {profile_name}
@@ -734,8 +733,6 @@ Important rules:
 - Keep the tone encouraging and grounded
 - Make the student feel possibility, not pressure
 """
-
-
 def get_ai_interpretation(
     profile_name,
     age,
@@ -838,34 +835,98 @@ Rules:
         return fallback_questions
 
 
+def get_ai_deep_dive(
+    topic,
+    profile_name,
+    age,
+    country_focus,
+    favourite_subjects,
+    least_subjects,
+    dream_day,
+    answers,
+    normalized_scores,
+    final_ai_text="",
+):
+    if client is None:
+        return "Deep-dive AI is not available because no OPENAI_API_KEY is configured."
+
+    prompt = f"""
+You are helping a teenager explore their future in a practical and encouraging way.
+
+Student profile:
+- Name: {profile_name}
+- Age: {age}
+- Country focus: {country_focus}
+- Favourite subjects: {favourite_subjects}
+- Least favourite subjects: {least_subjects}
+- Ideal working day: {dream_day}
+
+Aptitude answers:
+{json.dumps(answers, indent=2)}
+
+Aptitude score pattern:
+{json.dumps(normalized_scores, indent=2)}
+
+Current roadmap summary:
+{final_ai_text}
+
+The aptitude results are the foundation of the analysis.
+Use the score pattern as the primary structure, then use the roadmap context to go deeper.
+
+The student wants to explore this topic in more depth:
+{topic}
+
+Your task:
+- answer only this topic
+- keep it clear, motivating, and practical
+- avoid repeating the full roadmap
+- be specific, not generic
+- make the answer useful for a teenager and parent
+- keep it concise but insightful
+
+If the topic is about AI, explain both:
+- replacement risk
+- how AI can be used as an advantage in that field
+
+If the topic is about studies or universities:
+- focus on pathways and examples
+- do not pretend admissions are guaranteed
+"""
+
+    try:
+        response = client.responses.create(
+            model="gpt-4.1-mini",
+            input=prompt,
+        )
+        return response.output_text
+    except Exception as e:
+        return f"Deep-dive AI failed: {e}"
+
+
 init_db()
 
 if "show_results" not in st.session_state:
     st.session_state["show_results"] = False
 
-if "final_ai_text" not in st.session_state:
-    st.session_state["final_ai_text"] = None
-
-<<<<<<< HEAD
 if "followup_ready" not in st.session_state:
     st.session_state["followup_ready"] = False
 
 if "roadmap_ready" not in st.session_state:
     st.session_state["roadmap_ready"] = False
 
+if "final_ai_text" not in st.session_state:
+    st.session_state["final_ai_text"] = None
+
 if "deep_dive_text" not in st.session_state:
     st.session_state["deep_dive_text"] = None
 
-st.title("🧭 Pathfinder")
-=======
-st.title("🧭 Bright Future")
->>>>>>> cad23b9e4095c99d4853f6e6335c649e1b604f48
-st.markdown(
-    """
-    ### Discover what could fit you — without forcing one narrow future
+st.title("✨ Bright Future")
+st.subheader("Discover what could excite, challenge, and inspire your future")
 
-    This tool helps you explore your strengths, interests, and working style, then turns that into practical ideas for studies, careers, and next steps.
-    """
+st.write(
+    "This is not about choosing a career today.\n\n"
+    "It’s about discovering what energises you, what you're naturally good at, "
+    "and what paths might lead to a future that feels meaningful and exciting."
 )
 
 with st.expander("How to use Bright Future"):
@@ -888,26 +949,26 @@ with st.expander("How to use Bright Future"):
 if client is None:
     st.warning("AI interpretation is not active yet. Add OPENAI_API_KEY to Streamlit secrets to enable it.")
 
-page = st.sidebar.radio("Choose a section", ["Take an assessment", "View combined profile"])
+page = st.sidebar.radio("Your journey", ["Start discovery", "View your progress"])
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### What this is for")
 st.sidebar.markdown(
     """
-    Pathfinder helps students:
+    Bright Future helps students:
     - understand themselves better
     - explore possible futures
     - build confidence without pressure
     """
 )
 
-if page == "Take an assessment":
+if page == "Start discovery":
     st.progress(25, text="Step 1 of 4 — Build your starting profile")
     st.header("Discover your starting profile")
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        profile_name = st.text_input("Teen profile name", placeholder="e.g. Emma Smith")
+        profile_name = st.text_input("Student name", placeholder="e.g. Emma Smith")
     with col2:
         profile_code = st.text_input("Profile code", placeholder="e.g. emma-2026")
     with col3:
@@ -947,12 +1008,12 @@ if page == "Take an assessment":
     least_subjects = st.text_input("Least favourite subjects", placeholder="e.g. Chemistry, History")
     dream_day = st.text_area(
         "Describe an ideal working day",
-        placeholder="What would she be doing? Working with people, ideas, data, design, machines...",
+        placeholder="What would they be doing? Working with people, ideas, data, design, machines...",
     )
 
     col_a, col_b = st.columns([3, 1])
     with col_a:
-        save_clicked = st.button("Show first-fit profile", type="primary")
+        save_clicked = st.button("Start discovery", type="primary")
     with col_b:
         if st.button("Reset"):
             st.session_state["show_results"] = False
@@ -960,7 +1021,6 @@ if page == "Take an assessment":
             st.session_state["roadmap_ready"] = False
             st.session_state["final_ai_text"] = None
             st.session_state["deep_dive_text"] = None
-
             for key in [
                 "saved_profile_name",
                 "saved_profile_code",
@@ -974,12 +1034,11 @@ if page == "Take an assessment":
                 "saved_respondent_role",
             ]:
                 st.session_state.pop(key, None)
-
             st.rerun()
 
-        if save_clicked:
+    if save_clicked:
         if not profile_name or not profile_code:
-            st.error("Add a profile name and profile code first.")
+            st.error("Add a student name and profile code first.")
         else:
             raw_scores, _ = score_answers(answers)
             raw_scores = apply_context_boost(
@@ -1032,16 +1091,14 @@ if page == "Take an assessment":
             st.session_state["saved_normalized_scores"] = normalized_scores
             st.session_state["saved_respondent_role"] = respondent_role
 
-        if st.session_state.get("show_results"):
+    if st.session_state.get("show_results"):
         normalized_scores = st.session_state["saved_normalized_scores"]
         saved_answers = st.session_state["saved_answers"]
 
         if st.session_state.get("followup_ready") and not st.session_state.get("roadmap_ready"):
             st.progress(60, text="Step 2 of 4 — Refine your profile")
             st.success("Great start. You’ve already revealed some strong signals.")
-            st.info(
-                "Now let’s go a bit deeper before revealing your full Bright Future roadmap."
-            )
+            st.info("Now let’s go a bit deeper before revealing your full Bright Future roadmap.")
 
             st.markdown("## Level up your profile")
             followup_questions = get_ai_followup_questions(
@@ -1084,6 +1141,10 @@ if page == "Take an assessment":
         if st.session_state.get("roadmap_ready"):
             st.progress(100, text="Step 3 of 4 — Your Bright Future reveal")
             st.markdown("## 🌟 Your Bright Future")
+            st.write(
+                "This is your current best-fit direction based on how you think, what you enjoy, "
+                "and what seems to energise you most."
+            )
 
             top = top_matches(normalized_scores)
             metric_cols = st.columns(len(top))
@@ -1105,10 +1166,10 @@ if page == "Take an assessment":
             ).sort_values("Fit %", ascending=False)
             st.bar_chart(score_df.set_index("Cluster"))
 
+            st.markdown("## Compare with previous results")
             history_df = get_profile_history(st.session_state["saved_profile_code"])
             comparison = compare_latest_to_previous(history_df)
 
-            st.markdown("## Compare with previous results")
             if comparison is None:
                 st.info("No previous saved result yet for this profile. Save another run later to compare changes over time.")
             else:
@@ -1128,6 +1189,8 @@ if page == "Take an assessment":
                 st.write(st.session_state["final_ai_text"])
 
                 st.markdown("## Explore this result further")
+                st.write("Pick one area to explore in more depth.")
+
                 deep_dive_topic = st.selectbox(
                     "Choose a topic",
                     [
@@ -1163,8 +1226,15 @@ if page == "Take an assessment":
                     st.markdown(f"### Deep dive: {deep_dive_topic}")
                     st.write(st.session_state["deep_dive_text"])
 
+                st.markdown("---")
+                st.markdown(
+                    "**Remember:** You don’t need to have everything figured out. "
+                    "The goal is to explore, test, and learn. The clearer your actions, "
+                    "the brighter your future becomes."
+                )
+
 else:
-    st.header("Combined profile view")
+    st.header("View your progress")
     profile_code_lookup = st.text_input("Enter profile code", placeholder="e.g. emma-2026")
 
     if profile_code_lookup:
@@ -1210,7 +1280,6 @@ else:
                 st.bar_chart(score_df.set_index("Cluster"))
 
                 st.subheader("History and comparison")
-
                 history_df = get_profile_history(profile_code_lookup.lower().strip())
                 comparison = compare_latest_to_previous(history_df)
 
