@@ -1,4 +1,4 @@
-# Pathfinder Career Discovery Bot
+# Bright Future Career Discovery Bot
 
 A Streamlit prototype for repeatable teenager career exploration.
 
@@ -20,7 +20,7 @@ A Streamlit prototype for repeatable teenager career exploration.
 pip install -r requirements.txt
 streamlit run app.py
 
-# Pathfinder Career Discovery Bot
+# Bright Future Career Discovery Bot
 
 A Streamlit prototype for repeatable teenager career exploration.
 
