@@ -339,7 +339,6 @@ def init_db():
     try:
         conn = get_connection()
         cur = conn.cursor()
-
         cur.execute(
             """
             CREATE TABLE IF NOT EXISTS assessments (
@@ -361,7 +360,6 @@ def init_db():
             )
             """
         )
-
         conn.commit()
         conn.close()
     except Exception as e:
@@ -411,7 +409,6 @@ def score_answers(answers):
         answer = int(answers.get(q["key"], 3))
         for cluster, weight in q["weights"].items():
             raw[cluster] += answer * weight
-
     max_score = max(raw.values()) if raw else 1
     normalized = {k: round((v / max_score) * 100, 1) if max_score else 0 for k, v in raw.items()}
     return raw, normalized
@@ -681,6 +678,12 @@ Rules:
 
 init_db()
 
+if "show_results" not in st.session_state:
+    st.session_state["show_results"] = False
+
+if "final_ai_text" not in st.session_state:
+    st.session_state["final_ai_text"] = None
+
 st.title("🧭 Pathfinder Career Discovery")
 st.write(
     "A repeatable discovery app for teenagers. It combines self-assessment with parent, teacher, or trusted-friend observations, then maps the result to career clusters, study directions, and a first-pass university shortlist."
@@ -748,7 +751,29 @@ if page == "Take an assessment":
         placeholder="What would she be doing? Working with people, ideas, data, design, machines...",
     )
 
-    if st.button("Save assessment and show results", type="primary"):
+    col_a, col_b = st.columns([3, 1])
+    with col_a:
+        save_clicked = st.button("Save assessment and show results", type="primary")
+    with col_b:
+        if st.button("Reset current assessment"):
+            st.session_state["show_results"] = False
+            st.session_state["final_ai_text"] = None
+            for key in [
+                "saved_profile_name",
+                "saved_profile_code",
+                "saved_age",
+                "saved_country_focus",
+                "saved_favourite_subjects",
+                "saved_least_subjects",
+                "saved_dream_day",
+                "saved_answers",
+                "saved_normalized_scores",
+                "saved_respondent_role",
+            ]:
+                st.session_state.pop(key, None)
+            st.rerun()
+
+    if save_clicked:
         if not profile_name or not profile_code:
             st.error("Add a profile name and profile code first.")
         else:
@@ -786,61 +811,81 @@ if page == "Take an assessment":
                 )
             )
 
-            st.success("Assessment saved.")
-            st.subheader("This assessment result")
+            st.session_state["show_results"] = True
+            st.session_state["final_ai_text"] = None
+            st.session_state["saved_profile_name"] = profile_name
+            st.session_state["saved_profile_code"] = profile_code.lower().strip()
+            st.session_state["saved_age"] = age
+            st.session_state["saved_country_focus"] = country_focus
+            st.session_state["saved_favourite_subjects"] = favourite_subjects
+            st.session_state["saved_least_subjects"] = least_subjects
+            st.session_state["saved_dream_day"] = dream_day
+            st.session_state["saved_answers"] = answers
+            st.session_state["saved_normalized_scores"] = normalized_scores
+            st.session_state["saved_respondent_role"] = respondent_role
 
-            top = top_matches(normalized_scores)
-            for cluster, score in top:
-                studies, universities = generate_study_advice(cluster, country_focus)
-                st.markdown(f"### {cluster} — {score}%")
-                st.write(CAREER_CLUSTERS[cluster]["description"])
-                st.write("Suggested further studies: " + ", ".join(studies[:5]))
-                if universities:
-                    st.write("Starter university ideas: " + ", ".join(universities[:4]))
-                st.write("Try next:")
-                for act in CAREER_CLUSTERS[cluster]["activities"]:
-                    st.write(f"- {act}")
+    if st.session_state.get("show_results"):
+        normalized_scores = st.session_state["saved_normalized_scores"]
+        saved_answers = st.session_state["saved_answers"]
 
-            score_df = pd.DataFrame(
-                {"Cluster": list(normalized_scores.keys()), "Fit %": list(normalized_scores.values())}
-            ).sort_values("Fit %", ascending=False)
-            st.bar_chart(score_df.set_index("Cluster"))
+        st.success("Assessment saved.")
+        st.subheader("This assessment result")
 
-            st.subheader("AI follow-up questions")
-            followup_questions = get_ai_followup_questions(
-                profile_name=profile_name,
-                age=age,
-                country_focus=country_focus,
-                favourite_subjects=favourite_subjects,
-                least_subjects=least_subjects,
-                dream_day=dream_day,
-                answers=answers,
-                normalized_scores=normalized_scores,
+        top = top_matches(normalized_scores)
+        for cluster, score in top:
+            studies, universities = generate_study_advice(cluster, st.session_state["saved_country_focus"])
+            st.markdown(f"### {cluster} — {score}%")
+            st.write(CAREER_CLUSTERS[cluster]["description"])
+            st.write("Suggested further studies: " + ", ".join(studies[:5]))
+            if universities:
+                st.write("Starter university ideas: " + ", ".join(universities[:4]))
+            st.write("Try next:")
+            for act in CAREER_CLUSTERS[cluster]["activities"]:
+                st.write(f"- {act}")
+
+        score_df = pd.DataFrame(
+            {"Cluster": list(normalized_scores.keys()), "Fit %": list(normalized_scores.values())}
+        ).sort_values("Fit %", ascending=False)
+        st.bar_chart(score_df.set_index("Cluster"))
+
+        st.markdown("### Step 2: Answer these AI follow-up questions")
+        followup_questions = get_ai_followup_questions(
+            profile_name=st.session_state["saved_profile_name"],
+            age=st.session_state["saved_age"],
+            country_focus=st.session_state["saved_country_focus"],
+            favourite_subjects=st.session_state["saved_favourite_subjects"],
+            least_subjects=st.session_state["saved_least_subjects"],
+            dream_day=st.session_state["saved_dream_day"],
+            answers=saved_answers,
+            normalized_scores=normalized_scores,
+        )
+
+        followup_answers = {}
+        for i, question in enumerate(followup_questions, start=1):
+            followup_answers[f"q{i}"] = st.text_area(
+                f"{i}. {question}",
+                key=f"followup_{st.session_state['saved_profile_code']}_{i}",
             )
 
-            followup_answers = {}
-            for i, question in enumerate(followup_questions, start=1):
-                followup_answers[f"q{i}"] = st.text_area(
-                    f"{i}. {question}",
-                    key=f"followup_{profile_code}_{i}",
+        st.markdown("### Step 3: Generate your final AI profile")
+        if st.button("Generate final AI profile", key="generate_ai"):
+            with st.spinner("Generating AI interpretation..."):
+                ai_text = get_ai_interpretation(
+                    profile_name=st.session_state["saved_profile_name"],
+                    age=st.session_state["saved_age"],
+                    country_focus=st.session_state["saved_country_focus"],
+                    favourite_subjects=st.session_state["saved_favourite_subjects"],
+                    least_subjects=st.session_state["saved_least_subjects"],
+                    dream_day=st.session_state["saved_dream_day"],
+                    answers=saved_answers,
+                    normalized_scores=normalized_scores,
+                    respondent_role=st.session_state["saved_respondent_role"],
+                    followup_answers=followup_answers,
                 )
+            st.session_state["final_ai_text"] = ai_text
 
-            st.subheader("AI interpretation")
-            if st.button("Generate AI interpretation", key="generate_ai_interpretation"):
-                with st.spinner("Generating AI interpretation..."):
-                    ai_text = get_ai_interpretation(
-                        profile_name=profile_name,
-                        age=age,
-                        country_focus=country_focus,
-                        favourite_subjects=favourite_subjects,
-                        least_subjects=least_subjects,
-                        dream_day=dream_day,
-                        answers=answers,
-                        normalized_scores=normalized_scores,
-                        respondent_role=respondent_role,
-                        followup_answers=followup_answers,
-                    )
-                st.write(ai_text)
+        if st.session_state.get("final_ai_text"):
+            st.write(st.session_state["final_ai_text"])
 
 else:
     st.header("Combined profile view")
