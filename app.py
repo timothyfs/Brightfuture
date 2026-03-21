@@ -410,6 +410,55 @@ def score_answers(answers):
     normalized = {k: round((v / max_score) * 100, 1) if max_score else 0 for k, v in raw.items()}
     return raw, normalized
 
+def apply_context_boost(raw_scores, favourite_subjects, least_subjects, dream_day):
+    positive_text = f"{favourite_subjects} {dream_day}".lower()
+    negative_text = f"{least_subjects}".lower()
+
+    positive_keywords = {
+        "Creative & Design": [
+            "art", "design", "drawing", "fashion", "media", "photography",
+            "film", "writing", "creative", "architecture", "music", "drama"
+        ],
+        "Engineering & Technology": [
+            "math", "physics", "coding", "computer", "engineering",
+            "robotics", "technology", "mechanical", "software"
+        ],
+        "Research & Analysis": [
+            "economics", "science", "research", "analysis", "data",
+            "history", "politics", "geography"
+        ],
+        "People, Health & Education": [
+            "biology", "psychology", "teaching", "helping", "health",
+            "medicine", "children", "care"
+        ],
+        "Business, Law & Leadership": [
+            "business", "law", "debate", "leadership", "entrepreneurship",
+            "management", "public speaking"
+        ],
+        "Operations, Finance & Project Delivery": [
+            "finance", "accounting", "organisation", "planning",
+            "project", "logistics", "spreadsheet"
+        ],
+    }
+
+    negative_keywords = {
+        "Creative & Design": ["art", "design", "drawing", "media"],
+        "Engineering & Technology": ["math", "physics", "coding", "technology"],
+        "Research & Analysis": ["economics", "science", "data", "history"],
+        "People, Health & Education": ["biology", "psychology", "health"],
+        "Business, Law & Leadership": ["business", "law", "debate"],
+        "Operations, Finance & Project Delivery": ["finance", "accounting", "planning"],
+    }
+
+    for cluster, keywords in positive_keywords.items():
+        matches = sum(1 for kw in keywords if kw in positive_text)
+        raw_scores[cluster] += matches * 3
+
+    for cluster, keywords in negative_keywords.items():
+        matches = sum(1 for kw in keywords if kw in negative_text)
+        raw_scores[cluster] -= matches * 1.5
+
+    return raw_scores
 
 def aggregate_scores(df):
     if df.empty:
