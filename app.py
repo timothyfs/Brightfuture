@@ -681,33 +681,8 @@ def score_answers(answers):
     max_score = max(raw.values()) if raw else 1
     normalized = {k: round((v / max_score) * 100, 1) if max_score else 0 for k, v in raw.items()}
     return raw, normalized
-user_email = get_current_user_email()
-profile_df = load_profile(user_email)
-saved_profile = None
-if not profile_df.empty:
-    saved_profile = profile_df.iloc[0]
-if profile_df.empty:
-    st.header("👋 Welcome to Bright Future")
-    st.write("Let's create your personal profile first.")
 
-    name = st.text_input("Your name")
-    age = st.number_input("Your age", 12, 25, 16)
-    country = st.selectbox("Where do you want to study?", ["France", "UK", "Switzerland"])
 
-    if st.button("Save my profile"):
-        if name:
-            save_profile(user_email, name, age, country)
-            st.success("Profile saved. You can now start your journey.")
-            st.rerun()
-        else:
-            st.error("Please enter your name")
-
-    st.stop()
-if saved_profile is not None:
-    with st.expander("My profile", expanded=False):
-        st.write(f"**Name:** {saved_profile['display_name']}")
-        st.write(f"**Age:** {saved_profile['target_age']}")
-        st.write(f"**Country focus:** {saved_profile['country_focus']}")
 def apply_context_boost(raw_scores, favourite_subjects, least_subjects, dream_day, super_powers):
     positive_text = f"{favourite_subjects} {dream_day} {super_powers}".lower()
     negative_text = f"{least_subjects}".lower()
@@ -1155,6 +1130,32 @@ if "final_ai_text" not in st.session_state:
 if "deep_dive_text" not in st.session_state:
     st.session_state["deep_dive_text"] = None
 
+
+user_email = get_current_user_email()
+profile_df = load_profile(user_email)
+saved_profile = None
+if not profile_df.empty:
+    saved_profile = profile_df.iloc[0]
+
+if profile_df.empty:
+    render_hero()
+    st.header("👋 Welcome to Bright Future")
+    st.write("Let's create your personal profile first.")
+
+    name = st.text_input("Your name")
+    age = st.number_input("Your age", 12, 25, 16)
+    country = st.selectbox("Where do you want to study?", ["France", "UK", "Switzerland"])
+
+    if st.button("Save my profile"):
+        if name:
+            save_profile(user_email, name, age, country)
+            st.success("Profile saved. You can now start your journey.")
+            st.rerun()
+        else:
+            st.error("Please enter your name")
+
+    st.stop()
+
 render_hero()
 st.markdown(
     """
@@ -1185,6 +1186,12 @@ with st.expander("How to use Bright Future"):
 
 if client is None:
     st.warning("AI interpretation is not active yet. Add OPENAI_API_KEY to Streamlit secrets to enable it.")
+
+if saved_profile is not None:
+    with st.expander("My profile", expanded=False):
+        st.write(f"**Name:** {saved_profile['display_name']}")
+        st.write(f"**Age:** {saved_profile['target_age']}")
+        st.write(f"**Country focus:** {saved_profile['country_focus']}")
 
 page = st.sidebar.radio("Your journey", ["Start discovery", "View your progress"])
 st.sidebar.markdown("---")
