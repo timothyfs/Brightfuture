@@ -1200,6 +1200,75 @@ If the topic is about studies or universities:
         return f"Deep-dive AI failed: {e}"
 
 
+CLUSTER_ICONS = {
+    "Engineering & Technology": "⚙️",
+    "Research & Analysis": "🔬",
+    "Creative & Design": "🎨",
+    "People, Health & Education": "💛",
+    "Business, Law & Leadership": "🚀",
+    "Operations, Finance & Project Delivery": "📊",
+}
+
+
+def short_cluster_signal(cluster, score):
+    icon = CLUSTER_ICONS.get(cluster, "✨")
+    desc = CAREER_CLUSTERS.get(cluster, {}).get("description", "")
+    short_desc = desc.split(".")[0].strip()
+    return icon, f"{score}%", short_desc
+
+
+def reveal_summary_text(top_matches_list):
+    if not top_matches_list:
+        return "You're starting to build a picture of what suits you."
+
+    top_names = [name for name, _ in top_matches_list[:3]]
+    if len(top_names) == 1:
+        return f"Your strongest signal right now points toward {top_names[0]}."
+    if len(top_names) == 2:
+        return f"Your strongest signals right now point toward {top_names[0]} and {top_names[1]}."
+    return f"Your strongest signals right now point toward {top_names[0]}, with {top_names[1]} and {top_names[2]} also showing up strongly."
+
+
+def render_reveal_section(normalized_scores, country_focus, final_ai_text, super_powers_text=None):
+    top = top_matches(normalized_scores)
+
+    st.markdown("## ✨ What stands out about you")
+    st.info(reveal_summary_text(top))
+
+    cols = st.columns(len(top) if top else 1)
+    for i, (cluster, score) in enumerate(top):
+        icon, score_text, short_desc = short_cluster_signal(cluster, score)
+        with cols[i]:
+            st.markdown(f"### {icon} {cluster}")
+            st.metric("Signal", score_text)
+            if short_desc:
+                st.caption(short_desc)
+
+    if super_powers_text and str(super_powers_text).strip():
+        with st.expander("⚡ What could make you different", expanded=False):
+            st.write(super_powers_text)
+
+    with st.expander("🧭 Your possible paths", expanded=True):
+        if final_ai_text:
+            st.write(final_ai_text)
+        else:
+            st.info("Your roadmap will appear here after the AI interpretation is generated.")
+
+    with st.expander("📘 See the full fit-zone detail", expanded=False):
+        for cluster, score in top:
+            studies, universities = generate_study_advice(cluster, country_focus)
+            st.markdown(f"**{CLUSTER_ICONS.get(cluster, '✨')} {cluster} — {score}%**")
+            st.write(CAREER_CLUSTERS[cluster]["description"])
+            st.write("Suggested further studies: " + ", ".join(studies[:5]))
+            if universities:
+                st.write("Starter university ideas: " + ", ".join(universities[:4]))
+
+        score_df = pd.DataFrame(
+            {"Cluster": list(normalized_scores.keys()), "Fit %": list(normalized_scores.values())}
+        ).sort_values("Fit %", ascending=False)
+        st.bar_chart(score_df.set_index("Cluster"))
+
+
 init_db()
 
 if "show_results" not in st.session_state:
@@ -1252,7 +1321,7 @@ st.sidebar.markdown("### Account")
 st.sidebar.write(f"Signed in as: {current_user_email() or st.user.get('email', 'Unknown user')}")
 if saved_profile is not None:
     with st.sidebar.expander("My profile", expanded=False):
-        st.write(f"**Name:** 👋 {saved_profile['display_name']}")
+        st.write(f"**Name:** {saved_profile['display_name']}")
         st.write(f"**Age:** {saved_profile['target_age']}")
         st.write(f"**Country focus:** {saved_profile['country_focus']}")
 
@@ -1532,25 +1601,12 @@ if page == "Start discovery":
                 "and what seems to energise you most."
             )
 
-            top = top_matches(normalized_scores)
-            metric_cols = st.columns(len(top))
-            for i, (cluster, score) in enumerate(top):
-                with metric_cols[i]:
-                    st.metric(label=cluster, value=f"{score}%")
-
-            with st.expander("See the fit-zone detail", expanded=False):
-                for cluster, score in top:
-                    studies, universities = generate_study_advice(cluster, st.session_state["saved_country_focus"])
-                    st.markdown(f"**{cluster} — {score}%**")
-                    st.write(CAREER_CLUSTERS[cluster]["description"])
-                    st.write("Suggested further studies: " + ", ".join(studies[:5]))
-                    if universities:
-                        st.write("Starter university ideas: " + ", ".join(universities[:4]))
-
-                score_df = pd.DataFrame(
-                    {"Cluster": list(normalized_scores.keys()), "Fit %": list(normalized_scores.values())}
-                ).sort_values("Fit %", ascending=False)
-                st.bar_chart(score_df.set_index("Cluster"))
+            render_reveal_section(
+                normalized_scores=normalized_scores,
+                country_focus=st.session_state["saved_country_focus"],
+                final_ai_text=st.session_state.get("final_ai_text"),
+                super_powers_text=st.session_state.get("saved_super_powers", ""),
+            )
 
             with st.expander("Compare with previous results", expanded=False):
                 history_df = get_profile_history(st.session_state["saved_profile_code"])
@@ -1572,10 +1628,7 @@ if page == "Start discovery":
                         st.line_chart(pivot_df)
 
             if st.session_state.get("final_ai_text"):
-                with st.expander("Your integrated roadmap", expanded=True):
-                    st.write(st.session_state["final_ai_text"])
-
-                with st.expander("Explore this result further", expanded=False):
+                with st.expander("🔍 Explore this result further", expanded=False):
                     st.write("Pick one area to explore in more depth.")
 
                     deep_dive_topic = st.selectbox(
