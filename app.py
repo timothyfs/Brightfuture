@@ -5,9 +5,262 @@ import streamlit as st
 import pandas as pd
 import os
 from openai import OpenAI
+from io import BytesIO
+try:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+    REPORTLAB_AVAILABLE = True
+except Exception:
+    REPORTLAB_AVAILABLE = False
 DB_PATH = os.getenv("DB_PATH", "/tmp/career_bot.db")
 OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY", None)
 client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+
+
+TRANSLATIONS = {
+    "English": {
+        "language_label": "Language / Langue",
+        "journey_label": "Your journey",
+        "start_discovery": "Start discovery",
+        "my_journey": "My Journey",
+        "account": "Account",
+        "signed_in_as": "Signed in as:",
+        "my_profile": "My profile",
+        "name": "Name",
+        "age": "Age",
+        "country_focus": "Country focus",
+        "edit_profile": "Edit my profile",
+        "your_name": tr(language, "your_name"),
+        "default_country_focus": tr(language, "default_country_focus"),
+        "update_profile": "Update profile",
+        "logout": "Log out",
+        "step1_progress": "Step 1 of 4 — Build your starting profile",
+        "step1_badge": "Step 1",
+        "discover_profile_title": "Discover your starting profile",
+        "discover_profile_desc": "Start with instincts, not pressure. You can refine it in the next step.",
+        "saved_profile_prefill": "Your saved profile is used to pre-fill this discovery. You can change values for this run without changing your default profile.",
+        "student_name": "Student name",
+        "completing_as": tr(language, "completing_as"),
+        "observer_weight": tr(language, "observer_weight"),
+        "observer_help": "Higher = greater influence when combining multiple responses. Self should usually be highest.",
+        "tell_us_think_work": "Tell us how this person tends to think and work",
+        "scale_caption": "1 = strongly disagree, 5 = strongly agree",
+        "context_header": "A little more context",
+        "fav_subjects": "Favourite subjects",
+        "least_subjects": "Least favourite subjects",
+        "ideal_day": tr(language, "ideal_day"),
+        "super_powers": tr(language, "super_powers"),
+        "super_powers_help": "This is not for diagnosis. It is for strengths that may matter, especially things that are often misunderstood.",
+        "start_discovery_btn": "Start discovery",
+        "reset": "Reset",
+        "profile_saved": "Profile saved. You can now start your journey.",
+        "enter_name_continue": "We just need your name to get started.",
+        "great_start": "Great start. You’ve already revealed some strong signals.",
+        "refine_prompt": "Now let’s go a bit deeper before revealing your full Bright Future roadmap.",
+        "level_up": "Level up your profile",
+        "reveal_btn": "Reveal my Bright Future",
+        "building_roadmap": "Building your roadmap...",
+        "step3_progress": "Step 3 of 4 — Your Bright Future reveal",
+        "step3_badge": "Step 3",
+        "bright_future_title": "🌟 Your Bright Future",
+        "bright_future_desc": "Your strongest fit zones and roadmap are shown below. Open the sections that interest you most.",
+        "best_fit_direction": "This is your current best-fit direction based on how you think, what you enjoy, and what seems to energise you most.",
+        "compare_previous": "Compare with previous results",
+        "no_previous_result": "No previous saved result yet for this profile. Save another run later to compare changes over time.",
+        "comparing_latest": "Comparing latest result from",
+        "with_previous": "with previous result from",
+        "explore_further": "🔍 Explore this result further",
+        "pick_area": "Pick one area to explore in more depth.",
+        "choose_topic": tr(language, "choose_topic"),
+        "explore_topic": "Explore this topic",
+        "exploring_topic": "Exploring this topic...",
+        "deep_dive": "Deep dive",
+        "remember": "Remember:",
+        "remember_body": "You don’t need to have everything figured out. The goal is to explore, test, and learn. The clearer your actions, the brighter your future becomes.",
+        "journey_badge": "Journey",
+        "journey_title": "My Journey",
+        "journey_desc": "Revisit earlier runs, compare how your thinking changes, and reopen past roadmaps.",
+        "no_journey_entries": "You have no saved journey entries yet. Start a discovery first.",
+        "my_saved_entries": "My saved entries",
+        "choose_past_entry": "Choose a past entry",
+        "snapshot": "Snapshot",
+        "favourite_subjects": "Favourite subjects",
+        "ideal_working_day": "Ideal working day",
+        "score_pattern": "Score pattern",
+        "no_score_data": "No score data saved for this entry.",
+        "could_not_read_score": "Could not read score data for this entry.",
+        "ai_roadmap_entry": "AI roadmap from this entry",
+        "no_saved_roadmap": "This entry does not yet have a saved AI roadmap.",
+        "pdf_download": "Download PDF report",
+        "pdf_download_entry": "Download this entry as PDF",
+        "report_title": "Bright Future Report",
+        "what_stands_out": "## ✨ What stands out about you",
+        "what_could_make_you_different": "⚡ What could make you different",
+        "possible_paths": "🧭 Your possible paths",
+        "roadmap_appears": "Your roadmap will appear here after the AI interpretation is generated.",
+        "what_to_do_next": "🎯 What to do next",
+        "focus_school": "What to focus on at school",
+        "practical_move": "One practical next move",
+        "places_explore": "Places to explore",
+        "look_at_env": "Look at environments such as",
+        "full_fit_detail": "📘 See the full fit-zone detail",
+        "suggested_further_studies": "Suggested further studies:",
+        "starter_university_ideas": "Starter university ideas:",
+        "journey_so_far": "### Your journey so far",
+        "details": "#### Details",
+        "unknown_role": "Unknown role",
+        "support_msg": "Some of what you’ve written touches on sensitive topics. If you’re exploring careers that help people in difficult situations, that’s meaningful, and we can still help with that. If this is personal or affecting you directly, it’s important to talk to a trusted adult, parent, teacher, school counsellor, or local support service. If anyone is in immediate danger, contact local emergency services now.",
+    },
+    "Français": {
+        "language_label": "Langue / Language",
+        "journey_label": "Votre parcours",
+        "start_discovery": "Commencer l’exploration",
+        "my_journey": "Mon parcours",
+        "account": "Compte",
+        "signed_in_as": "Connecté en tant que :",
+        "my_profile": "Mon profil",
+        "name": "Nom",
+        "age": "Âge",
+        "country_focus": "Pays visé",
+        "edit_profile": "Modifier mon profil",
+        "your_name": "Votre nom",
+        "default_country_focus": "Pays par défaut",
+        "update_profile": "Mettre à jour le profil",
+        "logout": "Se déconnecter",
+        "step1_progress": "Étape 1 sur 4 — Construire votre profil de départ",
+        "step1_badge": "Étape 1",
+        "discover_profile_title": "Découvrez votre profil de départ",
+        "discover_profile_desc": "Commencez par vos instincts, sans pression. Vous pourrez affiner au prochain étape.",
+        "saved_profile_prefill": "Votre profil enregistré est utilisé pour préremplir cette exploration. Vous pouvez modifier les valeurs pour cette session sans changer votre profil par défaut.",
+        "student_name": "Nom de l’élève",
+        "completing_as": "Vous répondez en tant que",
+        "observer_weight": "Poids de l’observateur",
+        "observer_help": "Plus la valeur est élevée, plus cette réponse comptera dans le profil combiné. L’auto-évaluation doit généralement compter le plus.",
+        "tell_us_think_work": "Décrivez comment cette personne pense et travaille",
+        "scale_caption": "1 = pas du tout d’accord, 5 = tout à fait d’accord",
+        "context_header": "Un peu plus de contexte",
+        "fav_subjects": "Matières préférées",
+        "least_subjects": "Matières les moins aimées",
+        "ideal_day": "Décrivez une journée de travail idéale",
+        "super_powers": "Super pouvoirs ou forces cachées possibles",
+        "super_powers_help": "Ce n’est pas pour poser un diagnostic. Il s’agit de forces possibles, surtout celles souvent mal comprises.",
+        "start_discovery_btn": "Commencer l’exploration",
+        "reset": "Réinitialiser",
+        "profile_saved": "Profil enregistré. Vous pouvez maintenant commencer votre parcours.",
+        "enter_name_continue": "Nous avons juste besoin de votre nom pour commencer.",
+        "great_start": "Très bon début. Vous avez déjà révélé des signaux forts.",
+        "refine_prompt": "Allons un peu plus loin avant de révéler votre feuille de route Bright Future.",
+        "level_up": "Affinez votre profil",
+        "reveal_btn": "Révéler mon Bright Future",
+        "building_roadmap": "Création de votre feuille de route...",
+        "step3_progress": "Étape 3 sur 4 — Révélation de votre Bright Future",
+        "step3_badge": "Étape 3",
+        "bright_future_title": "🌟 Votre Bright Future",
+        "bright_future_desc": "Vos zones de compatibilité les plus fortes et votre feuille de route sont ci-dessous. Ouvrez les sections qui vous intéressent le plus.",
+        "best_fit_direction": "Voici votre direction la plus compatible actuellement, en fonction de votre façon de penser, de ce que vous aimez et de ce qui vous donne de l’énergie.",
+        "compare_previous": "Comparer avec les résultats précédents",
+        "no_previous_result": "Aucun résultat précédent enregistré pour ce profil. Faites une nouvelle exploration plus tard pour comparer l’évolution.",
+        "comparing_latest": "Comparaison du dernier résultat du",
+        "with_previous": "avec le résultat précédent du",
+        "explore_further": "🔍 Explorer davantage ce résultat",
+        "pick_area": "Choisissez un sujet à explorer plus en profondeur.",
+        "choose_topic": "Choisir un sujet",
+        "explore_topic": "Explorer ce sujet",
+        "exploring_topic": "Exploration du sujet...",
+        "deep_dive": "Approfondissement",
+        "remember": "À retenir :",
+        "remember_body": "Vous n’avez pas besoin d’avoir tout compris tout de suite. Le but est d’explorer, de tester et d’apprendre. Plus vos actions sont claires, plus votre avenir s’éclaircit.",
+        "journey_badge": "Parcours",
+        "journey_title": "Mon parcours",
+        "journey_desc": "Revenez sur vos anciennes explorations, comparez l’évolution de votre réflexion et rouvrez les feuilles de route passées.",
+        "no_journey_entries": "Vous n’avez pas encore d’entrées enregistrées. Commencez d’abord une exploration.",
+        "my_saved_entries": "Mes entrées enregistrées",
+        "choose_past_entry": "Choisir une entrée passée",
+        "snapshot": "Aperçu",
+        "favourite_subjects": "Matières préférées",
+        "ideal_working_day": "Journée de travail idéale",
+        "score_pattern": "Profil des scores",
+        "no_score_data": "Aucune donnée de score enregistrée pour cette entrée.",
+        "could_not_read_score": "Impossible de lire les données de score pour cette entrée.",
+        "ai_roadmap_entry": "Feuille de route IA de cette entrée",
+        "no_saved_roadmap": "Aucune feuille de route enregistrée pour cette entrée.",
+        "pdf_download": "Télécharger le rapport PDF",
+        "pdf_download_entry": "Télécharger cette entrée en PDF",
+        "report_title": "Rapport Bright Future",
+        "what_stands_out": "## ✨ Ce qui ressort chez vous",
+        "what_could_make_you_different": "⚡ Ce qui pourrait vous rendre différent",
+        "possible_paths": "🧭 Vos pistes possibles",
+        "roadmap_appears": "Votre feuille de route apparaîtra ici après la génération de l’interprétation IA.",
+        "what_to_do_next": "🎯 Que faire ensuite",
+        "focus_school": "Ce sur quoi se concentrer à l’école",
+        "practical_move": "Une prochaine action concrète",
+        "places_explore": "Lieux à explorer",
+        "look_at_env": "Explorez des environnements comme",
+        "full_fit_detail": "📘 Voir le détail complet des zones de compatibilité",
+        "suggested_further_studies": "Études suggérées :",
+        "starter_university_ideas": "Idées d’établissements pour commencer :",
+        "journey_so_far": "### Votre parcours jusqu’ici",
+        "details": "#### Détails",
+        "unknown_role": "Rôle inconnu",
+        "support_msg": "Une partie de ce que vous avez écrit touche à des sujets sensibles. Si vous explorez des métiers qui aident des personnes en difficulté, c’est important et nous pouvons toujours vous aider dans cette réflexion. Si cela est personnel ou vous touche directement, il est important d’en parler à un adulte de confiance, à un parent, à un enseignant, à un conseiller scolaire ou à un service d’aide local. Si quelqu’un est en danger immédiat, contactez les services d’urgence locaux.",
+    }
+}
+
+def tr(language, key):
+    return TRANSLATIONS.get(language, TRANSLATIONS["English"]).get(key, key)
+
+def build_pdf_report(title, sections):
+    if not REPORTLAB_AVAILABLE:
+        return None
+    buffer = BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+    y = height - 50
+    c.setTitle(title)
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(40, y, title)
+    y -= 30
+    c.setFont("Helvetica", 10)
+    for heading, lines in sections:
+        if y < 80:
+            c.showPage()
+            y = height - 50
+            c.setFont("Helvetica", 10)
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(40, y, str(heading))
+        y -= 18
+        c.setFont("Helvetica", 10)
+        for line in lines:
+            for rawline in str(line).split("\n"):
+                words = rawline.split()
+                current = ""
+                if not words:
+                    y -= 14
+                    continue
+                for word in words:
+                    trial = (current + " " + word).strip()
+                    if c.stringWidth(trial, "Helvetica", 10) > width - 80:
+                        c.drawString(50, y, current)
+                        y -= 14
+                        current = word
+                        if y < 60:
+                            c.showPage()
+                            y = height - 50
+                            c.setFont("Helvetica", 10)
+                    else:
+                        current = trial
+                if current:
+                    c.drawString(50, y, current)
+                    y -= 14
+                if y < 60:
+                    c.showPage()
+                    y = height - 50
+                    c.setFont("Helvetica", 10)
+        y -= 8
+    c.save()
+    buffer.seek(0)
+    return buffer
+
 
 def get_connection():
     return sqlite3.connect(DB_PATH, check_same_thread=False)
@@ -673,10 +926,7 @@ def should_redirect_to_support(*texts):
 
 def show_sensitive_support_message():
     st.warning(
-        "Some of what you’ve written touches on sensitive topics. "
-        "If you’re exploring careers that help people in difficult situations, that’s meaningful, and we can still help with that. "
-        "If this is personal or affecting you directly, it’s important to talk to a trusted adult, parent, teacher, school counsellor, or local support service. "
-        "If anyone is in immediate danger, contact local emergency services now."
+        tr(language if "language" in globals() else "English", "support_msg")
     )
 
 
@@ -932,14 +1182,14 @@ def build_ai_prompt(
     normalized_scores,
     respondent_role=None,
     followup_answers=None,
+    output_language="English",
 ):
     top_clusters = top_matches(normalized_scores, n=3)
 
     return f"""
 You are an outstanding career discovery adviser for teenagers.
 
-Your role is to help a young person understand themselves, see realistic possibilities, and feel encouraged about the future.
-
+Your role is to help a young person understand themselves, see realistic possibilities, and feel encouraged about the future.\n\nWrite the entire answer in {output_language}.\n
 You must combine:
 - grounded advice
 - practical next steps
@@ -1109,6 +1359,7 @@ def get_ai_interpretation(
     normalized_scores,
     respondent_role=None,
     followup_answers=None,
+    output_language="English",
 ):
     if client is None:
         return "AI interpretation is not available because no OPENAI_API_KEY is configured in Streamlit secrets."
@@ -1125,6 +1376,7 @@ def get_ai_interpretation(
         normalized_scores=normalized_scores,
         respondent_role=respondent_role,
         followup_answers=followup_answers,
+        output_language=output_language,
     )
 
     try:
@@ -1144,6 +1396,7 @@ def get_ai_followup_questions(
     super_powers,
     answers,
     normalized_scores,
+    output_language="English",
 ):
     fallback_questions = [
         "What kinds of activities make you lose track of time?",
@@ -1178,8 +1431,7 @@ Profile:
 - Answers: {json.dumps(answers)}
 - Scores: {json.dumps(normalized_scores)}
 
-Rules:
-- Ask exactly 5 questions
+Rules:\n- Write all 5 questions in {output_language}.\n- Ask exactly 5 questions
 - Questions should be short, clear, and teenager-friendly
 - Avoid corporate language
 - Avoid deterministic phrasing
@@ -1211,13 +1463,13 @@ def get_ai_deep_dive(
     answers,
     normalized_scores,
     final_ai_text="",
+    output_language="English",
 ):
     if client is None:
         return "Deep-dive AI is not available because no OPENAI_API_KEY is configured."
 
     prompt = f"""
-You are helping a teenager explore their future in a practical and encouraging way.
-
+You are helping a teenager explore their future in a practical and encouraging way.\n\nWrite the entire answer in {output_language}.\n
 Student profile:
 - Name: {profile_name}
 - Age: {age}
@@ -1300,7 +1552,7 @@ def reveal_summary_text(top_matches_list):
 def render_reveal_section(normalized_scores, country_focus, final_ai_text, super_powers_text=None):
     top = top_matches(normalized_scores)
 
-    st.markdown("## ✨ What stands out about you")
+    st.markdown(tr(language, "what_stands_out"))
     st.info(reveal_summary_text(top))
 
     cols = st.columns(len(top) if top else 1)
@@ -1313,33 +1565,33 @@ def render_reveal_section(normalized_scores, country_focus, final_ai_text, super
                 st.caption(short_desc)
 
     if super_powers_text and str(super_powers_text).strip():
-        with st.expander("⚡ What could make you different", expanded=False):
+        with st.expander(tr(language, "what_could_make_you_different"), expanded=False):
             st.write(super_powers_text)
 
-    with st.expander("🧭 Your possible paths", expanded=True):
+    with st.expander(tr(language, "possible_paths"), expanded=True):
         if final_ai_text:
             st.write(final_ai_text)
         else:
-            st.info("Your roadmap will appear here after the AI interpretation is generated.")
+            st.info(tr(language, "roadmap_appears"))
 
     next_steps = next_steps_suggestions(top, country_focus)
-    with st.expander("🎯 What to do next", expanded=True):
+    with st.expander(tr(language, "what_to_do_next"), expanded=True):
         st.write(next_steps["headline"])
-        st.markdown("**What to focus on at school**")
+        st.markdown(f"**{tr(language, 'focus_school')}**")
         st.write(next_steps["subjects"])
-        st.markdown("**One practical next move**")
+        st.markdown(f"**{tr(language, 'practical_move')}**")
         st.write(next_steps["actions"])
-        st.markdown("**Places to explore**")
-        st.write(f"Look at environments such as {next_steps['organisations']}.")
+        st.markdown(f"**{tr(language, 'places_explore')}**")
+        st.write(f"{tr(language, 'look_at_env')} {next_steps['organisations']}.")
 
-    with st.expander("📘 See the full fit-zone detail", expanded=False):
+    with st.expander(tr(language, "full_fit_detail"), expanded=False):
         for cluster, score in top:
             studies, universities = generate_study_advice(cluster, country_focus)
             st.markdown(f"**{CLUSTER_ICONS.get(cluster, '✨')} {cluster} — {score}%**")
             st.write(CAREER_CLUSTERS[cluster]["description"])
-            st.write("Suggested further studies: " + ", ".join(studies[:5]))
+            st.write(tr(language, "suggested_further_studies") + " " + ", ".join(studies[:5]))
             if universities:
-                st.write("Starter university ideas: " + ", ".join(universities[:4]))
+                st.write(tr(language, "starter_university_ideas") + " " + ", ".join(universities[:4]))
 
         score_df = pd.DataFrame(
             {"Cluster": list(normalized_scores.keys()), "Fit %": list(normalized_scores.values())}
@@ -1432,9 +1684,9 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-with st.expander("How to use Bright Future"):
+with st.expander("How to use Bright Future" if language == "English" else "Comment utiliser Bright Future"):
     st.markdown(
-        """
+        ("""
         **Bright Future is not here to box you in.**
 
         It helps you:
@@ -1446,7 +1698,19 @@ with st.expander("How to use Bright Future"):
         The goal is not to choose your whole life today.
 
         The goal is to get clearer, step by step.
-        """
+        """ if language == "English" else """
+        **Bright Future n’est pas là pour t’enfermer dans une case.**
+
+        Il t’aide à :
+        - repérer les tendances dans ce qui te donne de l’énergie
+        - explorer des pistes réalistes et stimulantes
+        - réfléchir aux études, stages et compétences à développer
+        - comprendre comment l’IA peut transformer différents métiers
+
+        Le but n’est pas de décider toute ta vie aujourd’hui.
+
+        Le but est d’y voir plus clair, étape par étape.
+        """)
     )
 
 st.info(
@@ -1457,19 +1721,20 @@ st.info(
 if client is None:
     st.warning("AI interpretation is not active yet. Add OPENAI_API_KEY to Streamlit secrets to enable it.")
 
-page = st.sidebar.radio("Your journey", ["Start discovery", "My Journey"])
+language = st.sidebar.selectbox(tr("English", "language_label"), ["English", "Français"])
+page = st.sidebar.radio(tr(language, "journey_label"), [tr(language, "start_discovery"), tr(language, "my_journey")])
 st.sidebar.markdown("---")
-st.sidebar.markdown("### Account")
-st.sidebar.write(f"Signed in as: {current_user_email() or st.user.get('email', 'Unknown user')}")
+st.sidebar.markdown(f"### {tr(language, 'account')}")
+st.sidebar.write(f"{tr(language, 'signed_in_as')} {current_user_email() or st.user.get('email', 'Unknown user')}")
 if saved_profile is not None:
-    with st.sidebar.expander("My profile", expanded=False):
-        st.write(f"**Name:** {saved_profile['display_name']}")
-        st.write(f"**Age:** {saved_profile['target_age']}")
-        st.write(f"**Country focus:** {saved_profile['country_focus']}")
+    with st.sidebar.expander(tr(language, "my_profile"), expanded=False):
+        st.write(f"**{tr(language, 'name')}:** {saved_profile['display_name']}")
+        st.write(f"**{tr(language, 'age')}:** {saved_profile['target_age']}")
+        st.write(f"**{tr(language, 'country_focus')}:** {saved_profile['country_focus']}")
 
-    with st.sidebar.expander("Edit my profile", expanded=False):
+    with st.sidebar.expander(tr(language, "edit_profile"), expanded=False):
         edit_name = st.text_input(
-            "Your name",
+            tr(language, "your_name"),
             value=str(saved_profile["display_name"] or ""),
             key="sidebar_edit_name",
         )
@@ -1484,13 +1749,13 @@ if saved_profile is not None:
         current_country = str(saved_profile["country_focus"] or "France")
         edit_country_index = edit_countries.index(current_country) if current_country in edit_countries else 0
         edit_country = st.selectbox(
-            "Default country focus",
+            tr(language, "default_country_focus"),
             edit_countries,
             index=edit_country_index,
             key="sidebar_edit_country",
         )
 
-        if st.button("Update profile", key="sidebar_update_profile"):
+        if st.button(tr(language, "update_profile"), key="sidebar_update_profile"):
             if edit_name.strip():
                 save_profile(current_user_email(), edit_name.strip(), int(edit_age), edit_country)
                 st.sidebar.success("Profile updated.")
@@ -1498,7 +1763,7 @@ if saved_profile is not None:
             else:
                 st.sidebar.info("Just add your name to save the profile 🙂")
 
-if st.sidebar.button("Log out"):
+if st.sidebar.button(tr(language, "logout")):
     st.logout()
 st.sidebar.markdown("---")
 st.sidebar.markdown("### ✨ What this is for")
@@ -1526,9 +1791,9 @@ st.sidebar.markdown("---")
 st.sidebar.markdown("### My data")
 st.sidebar.caption("Your saved profiles and history are now tied to your signed-in account.")
 
-if page == "Start discovery":
-    st.progress(25, text="Step 1 of 4 — Build your starting profile")
-    card_start("Step 1", "Discover your starting profile", "Start with instincts, not pressure. You can refine it in the next step.")
+if page == tr(language, "start_discovery"):
+    st.progress(25, text=tr(language, "step1_progress"))
+    card_start(tr(language, "step1_badge"), tr(language, "discover_profile_title"), tr(language, "discover_profile_desc"))
     st.caption(f"Signed in as {current_user_email()}")
 
     default_profile_name = str(saved_profile["display_name"]) if saved_profile is not None and pd.notnull(saved_profile["display_name"]) else ""
@@ -1536,20 +1801,20 @@ if page == "Start discovery":
     default_country_focus = str(saved_profile["country_focus"]) if saved_profile is not None and pd.notnull(saved_profile["country_focus"]) else "France"
     profile_code = default_profile_code(current_user_email())
 
-    st.caption("Your saved profile is used to pre-fill this discovery. You can change values for this run without changing your default profile.")
+    st.caption(tr(language, "saved_profile_prefill"))
 
     col1, col2 = st.columns(2)
     with col1:
-        profile_name = st.text_input("Student name", value=default_profile_name, placeholder="e.g. Emma Smith")
+        profile_name = st.text_input(tr(language, "student_name"), value=default_profile_name, placeholder="e.g. Emma Smith")
     with col2:
         age = st.number_input("Age", min_value=12, max_value=25, value=default_age)
 
     col4, col5, col6 = st.columns(3)
     with col4:
-        respondent_name = st.text_input("Your name", placeholder="e.g. Mum / Mr Jones")
+        respondent_name = st.text_input(tr(language, "your_name"), placeholder="e.g. Mum / Mr Jones")
     with col5:
         respondent_role = st.selectbox(
-            "You are completing this as",
+            tr(language, "completing_as"),
             ["Self", "Parent", "Teacher", "Friend", "Coach/Mentor"],
         )
     with col6:
@@ -1559,40 +1824,40 @@ if page == "Start discovery":
 
     default_weight = role_default_weight(respondent_role)
     relation_weight = st.slider(
-        "Observer weight",
+        tr(language, "observer_weight"),
         min_value=0.4,
         max_value=1.2,
         value=float(default_weight),
         step=0.05,
-        help="Higher = greater influence when combining multiple responses. Self should usually be highest.",
+        help=tr(language, "observer_help"),
     )
 
-    st.subheader("Tell us how this person tends to think and work")
-    st.caption("1 = strongly disagree, 5 = strongly agree")
+    st.subheader(tr(language, "tell_us_think_work"))
+    st.caption(tr(language, "scale_caption"))
     answers = {}
     qcols = st.columns(1)
     for idx, q in enumerate(QUESTIONS):
         with qcols[0]:
             answers[q["key"]] = st.slider(q["label"], 1, 5, 3, key=f"{respondent_role}_{q['key']}_{idx}")
 
-    st.subheader("A little more context")
-    favourite_subjects = st.text_input("Favourite subjects", placeholder="e.g. Maths, Biology, Art")
-    least_subjects = st.text_input("Least favourite subjects", placeholder="e.g. Chemistry, History")
+    st.subheader(tr(language, "context_header"))
+    favourite_subjects = st.text_input(tr(language, "fav_subjects"), placeholder="e.g. Maths, Biology, Art")
+    least_subjects = st.text_input(tr(language, "least_subjects"), placeholder="e.g. Chemistry, History")
     dream_day = st.text_area(
-        "Describe an ideal working day",
+        tr(language, "ideal_day"),
         placeholder="What would they be doing? Working with people, ideas, data, design, machines...",
     )
     super_powers = st.text_area(
-        "Possible super powers or hidden strengths",
+        tr(language, "super_powers"),
         placeholder="Examples: unusual energy, empathy, resilience, dyslexia-style thinking, ADHD-style energy, sports discipline, creativity, pattern recognition, social instinct...",
-        help="This is not for diagnosis. It is for strengths that may matter, especially things that are often misunderstood.",
+        help=tr(language, "super_powers_help"),
     )
 
     col_a, col_b = st.columns([3, 1])
     with col_a:
-        save_clicked = st.button("Start discovery", type="primary")
+        save_clicked = st.button(tr(language, "start_discovery_btn"), type="primary")
     with col_b:
-        if st.button("Reset"):
+        if st.button(tr(language, "reset")):
             st.session_state["show_results"] = False
             st.session_state["followup_ready"] = False
             st.session_state["roadmap_ready"] = False
@@ -1685,10 +1950,10 @@ if page == "Start discovery":
         if st.session_state.get("followup_ready") and not st.session_state.get("roadmap_ready"):
             st.progress(60, text="Step 2 of 4 — Refine your profile")
             card_start("Step 2", "Refine your profile", "A few smarter follow-up questions will help make the final reveal more accurate and more personal.")
-            st.success("Great start. You’ve already revealed some strong signals.")
-            st.info("Now let’s go a bit deeper before revealing your full Bright Future roadmap.")
+            st.success(tr(language, "great_start"))
+            st.info(tr(language, "refine_prompt"))
 
-            st.markdown("## Level up your profile")
+            st.markdown(f"## {tr(language, 'level_up')}")
 
             if should_redirect_to_support(
                 st.session_state["saved_favourite_subjects"],
@@ -1719,7 +1984,7 @@ if page == "Start discovery":
                     key=f"followup_{st.session_state['saved_profile_code']}_{i}",
                 )
 
-            if st.button("Reveal my Bright Future", key="generate_ai"):
+            if st.button(tr(language, "reveal_btn"), key="generate_ai"):
                 if should_redirect_to_support(
                     st.session_state["saved_favourite_subjects"],
                     st.session_state["saved_least_subjects"],
@@ -1729,7 +1994,7 @@ if page == "Start discovery":
                 ):
                     show_sensitive_support_message()
                 else:
-                    with st.spinner("Building your roadmap..."):
+                    with st.spinner(tr(language, "building_roadmap")):
                         ai_text = get_ai_interpretation(
                             profile_name=st.session_state["saved_profile_name"],
                             age=st.session_state["saved_age"],
@@ -1756,8 +2021,8 @@ if page == "Start discovery":
             card_end()
 
         if st.session_state.get("roadmap_ready"):
-            st.progress(100, text="Step 3 of 4 — Your Bright Future reveal")
-            card_start("Step 3", "🌟 Your Bright Future", "Your strongest fit zones and roadmap are shown below. Open the sections that interest you most.")
+            st.progress(100, text=tr(language, "step3_progress"))
+            card_start(tr(language, "step3_badge"), tr(language, "bright_future_title"), tr(language, "bright_future_desc"))
             st.write(
                 "This is your current best-fit direction based on how you think, what you enjoy, "
                 "and what seems to energise you most."
@@ -1770,13 +2035,33 @@ if page == "Start discovery":
                 super_powers_text=st.session_state.get("saved_super_powers", ""),
             )
 
-            with st.expander("Compare with previous results", expanded=False):
+            if st.session_state.get("final_ai_text"):
+                pdf_sections = [
+                    (tr(language, "report_title"), [f"{tr(language, 'name')}: {st.session_state.get('saved_profile_name', '')}",
+                                                   f"{tr(language, 'age')}: {st.session_state.get('saved_age', '')}",
+                                                   f"{tr(language, 'country_focus')}: {st.session_state.get('saved_country_focus', '')}"]),
+                    (tr(language, "possible_paths"), [st.session_state.get("final_ai_text", "")]),
+                ]
+                pdf_buffer = build_pdf_report(
+                    f"Bright Future - {st.session_state.get('saved_profile_name', 'report')}",
+                    pdf_sections,
+                )
+                if pdf_buffer is not None:
+                    st.download_button(
+                        tr(language, "pdf_download"),
+                        data=pdf_buffer,
+                        file_name=f"{st.session_state.get('saved_profile_code', 'bright_future')}_report.pdf",
+                        mime="application/pdf",
+                        key="download_current_report",
+                    )
+
+            with st.expander(tr(language, "compare_previous"), expanded=False):
                 history_df = get_profile_history(st.session_state["saved_profile_code"])
                 history_df = history_df[history_df["user_email"] == current_user_email()] if "user_email" in history_df.columns else history_df
                 comparison = compare_latest_to_previous(history_df)
 
                 if comparison is None:
-                    st.info("No previous saved result yet for this profile. Save another run later to compare changes over time.")
+                    st.info(tr(language, "no_previous_result"))
                 else:
                     st.write(
                         f"Comparing latest result from **{comparison['latest_date']}** "
@@ -1790,11 +2075,11 @@ if page == "Start discovery":
                         st.line_chart(pivot_df)
 
             if st.session_state.get("final_ai_text"):
-                with st.expander("🔍 Explore this result further", expanded=False):
-                    st.write("Pick one area to explore in more depth.")
+                with st.expander(tr(language, "explore_further"), expanded=False):
+                    st.write(tr(language, "pick_area"))
 
                     deep_dive_topic = st.selectbox(
-                        "Choose a topic",
+                        tr(language, "choose_topic"),
                         [
                             "Why this profile fits",
                             "Best subjects to focus on",
@@ -1809,7 +2094,7 @@ if page == "Start discovery":
                         key="deep_dive_topic",
                     )
 
-                    if st.button("Explore this topic", key="explore_topic"):
+                    if st.button(tr(language, "explore_topic"), key="explore_topic"):
                         if should_redirect_to_support(
                             st.session_state["saved_favourite_subjects"],
                             st.session_state["saved_least_subjects"],
@@ -1819,7 +2104,7 @@ if page == "Start discovery":
                         ):
                             show_sensitive_support_message()
                         else:
-                            with st.spinner("Exploring this topic..."):
+                            with st.spinner(tr(language, "exploring_topic")):
                                 deep_dive_text = get_ai_deep_dive(
                                     topic=deep_dive_topic,
                                     profile_name=st.session_state["saved_profile_name"],
@@ -1832,55 +2117,54 @@ if page == "Start discovery":
                                     answers=st.session_state["saved_answers"],
                                     normalized_scores=st.session_state["saved_normalized_scores"],
                                     final_ai_text=st.session_state["final_ai_text"],
+                                    output_language=language,
                                 )
                             st.session_state["deep_dive_text"] = deep_dive_text
 
                     if st.session_state.get("deep_dive_text"):
-                        st.markdown(f"### Deep dive: {deep_dive_topic}")
+                        st.markdown(f"### {tr(language, 'deep_dive')}: {deep_dive_topic}")
                         st.write(st.session_state["deep_dive_text"])
 
                 st.markdown("---")
                 st.markdown(
-                    "**Remember:** You don’t need to have everything figured out. "
-                    "The goal is to explore, test, and learn. The clearer your actions, "
-                    "the brighter your future becomes."
+                    f"**{tr(language, 'remember')}** {tr(language, 'remember_body')}"
                 )
             card_end()
 
 else:
-    card_start("Journey", "My Journey", "Revisit earlier runs, compare how your thinking changes, and reopen past roadmaps.")
+    card_start(tr(language, "journey_badge"), tr(language, "journey_title"), tr(language, "journey_desc"))
     user_email = current_user_email()
     history_df = load_user_assessment_history(user_email)
 
     if history_df.empty:
-        st.info("You have no saved journey entries yet. Start a discovery first.")
+        st.info(tr(language, "no_journey_entries"))
         card_end()
         st.stop()
 
     history_df = history_df.copy()
     history_df["entry_label"] = history_df.apply(
-        lambda row: f"{row['created_at']} — {row['respondent_role'] or 'Unknown role'}",
+        lambda row: f"{row['created_at']} — {row['respondent_role'] or tr(language, 'unknown_role')}",
         axis=1,
     )
 
-    with st.expander("My saved entries", expanded=True):
+    with st.expander(tr(language, "my_saved_entries"), expanded=True):
         display_df = history_df[["created_at", "profile_name", "respondent_role", "country_focus"]].copy()
         st.dataframe(display_df, use_container_width=True)
 
-    selected_label = st.selectbox("Choose a past entry", history_df["entry_label"].tolist())
+    selected_label = st.selectbox(tr(language, "choose_past_entry"), history_df["entry_label"].tolist())
     selected_row = history_df[history_df["entry_label"] == selected_label].iloc[0]
 
-    st.markdown("## Snapshot")
+    st.markdown(f"## {tr(language, 'snapshot')}")
     if pd.notnull(selected_row["profile_name"]):
         st.write(f"**Name:** {selected_row['profile_name']}")
     if pd.notnull(selected_row["country_focus"]):
         st.write(f"**Country focus:** {selected_row['country_focus']}")
     if pd.notnull(selected_row["favourite_subjects"]):
-        st.write(f"**Favourite subjects:** {selected_row['favourite_subjects']}")
+        st.write(f"**{tr(language, 'favourite_subjects')}:** {selected_row['favourite_subjects']}")
     if pd.notnull(selected_row["dream_day"]):
-        st.write(f"**Ideal working day:** {selected_row['dream_day']}")
+        st.write(f"**{tr(language, 'ideal_working_day')}:** {selected_row['dream_day']}")
 
-    with st.expander("Score pattern", expanded=False):
+    with st.expander(tr(language, "score_pattern"), expanded=False):
         try:
             scores = json.loads(selected_row["normalized_scores"]) if selected_row["normalized_scores"] else {}
             if scores:
@@ -1889,14 +2173,35 @@ else:
                 ).sort_values("Fit %", ascending=False)
                 st.bar_chart(score_df.set_index("Cluster"))
             else:
-                st.info("No score data saved for this entry.")
+                st.info(tr(language, "no_score_data"))
         except Exception:
-            st.info("Could not read score data for this entry.")
+            st.info(tr(language, "could_not_read_score"))
 
-    with st.expander("AI roadmap from this entry", expanded=True):
+    with st.expander(tr(language, "ai_roadmap_entry"), expanded=True):
         if pd.notnull(selected_row["final_ai_text"]) and str(selected_row["final_ai_text"]).strip():
             st.write(selected_row["final_ai_text"])
         else:
-            st.info("This entry does not yet have a saved AI roadmap.")
+            st.info(tr(language, "no_saved_roadmap"))
+
+    entry_pdf = build_pdf_report(
+        f"Bright Future - {selected_row['created_at']}",
+        [
+            (tr(language, "snapshot"), [
+                f"{tr(language, 'name')}: {selected_row['profile_name']}" if pd.notnull(selected_row["profile_name"]) else "",
+                f"{tr(language, 'country_focus')}: {selected_row['country_focus']}" if pd.notnull(selected_row["country_focus"]) else "",
+                f"{tr(language, 'favourite_subjects')}: {selected_row['favourite_subjects']}" if pd.notnull(selected_row["favourite_subjects"]) else "",
+                f"{tr(language, 'ideal_working_day')}: {selected_row['dream_day']}" if pd.notnull(selected_row["dream_day"]) else "",
+            ]),
+            (tr(language, "ai_roadmap_entry"), [selected_row["final_ai_text"] if pd.notnull(selected_row["final_ai_text"]) else ""]),
+        ],
+    )
+    if entry_pdf is not None:
+        st.download_button(
+            tr(language, "pdf_download_entry"),
+            data=entry_pdf,
+            file_name=f"bright_future_{selected_row['id']}.pdf",
+            mime="application/pdf",
+            key=f"download_entry_{selected_row['id']}",
+        )
 
     card_end()
