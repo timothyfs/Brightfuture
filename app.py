@@ -1678,11 +1678,64 @@ if page == "Start discovery":
 
 else:
     card_start("Journey", "My Journey", "Revisit earlier runs, compare how your thinking changes, and reopen past roadmaps.")
+
     user_email = current_user_email()
     history_df = load_user_assessment_history(user_email)
 
     if history_df.empty:
         st.info("You have no saved journey entries yet. Start a discovery first.")
+        card_end()
+        st.stop()
+
+    history_df = history_df.copy()
+    history_df = history_df.sort_values("created_at", ascending=False)
+
+    st.markdown("### Your journey so far")
+
+    for _, row in history_df.iterrows():
+        role = row["respondent_role"] if pd.notnull(row["respondent_role"]) and str(row["respondent_role"]).strip() else "Unknown role"
+        title = f"{row['created_at']} — {role}"
+
+        preview = ""
+        if pd.notnull(row["favourite_subjects"]) and str(row["favourite_subjects"]).strip():
+            preview = str(row["favourite_subjects"])
+        elif pd.notnull(row["dream_day"]) and str(row["dream_day"]).strip():
+            preview = str(row["dream_day"])
+
+        with st.expander(f"📅 {title}", expanded=False):
+            if preview:
+                st.markdown(f"**Snapshot:** {preview}")
+
+            st.markdown("#### Details")
+
+            if pd.notnull(row["profile_name"]):
+                st.write(f"**Name:** {row['profile_name']}")
+            if pd.notnull(row["country_focus"]):
+                st.write(f"**Country focus:** {row['country_focus']}")
+            if pd.notnull(row["favourite_subjects"]):
+                st.write(f"**Favourite subjects:** {row['favourite_subjects']}")
+            if pd.notnull(row["dream_day"]):
+                st.write(f"**Ideal working day:** {row['dream_day']}")
+
+            with st.expander("Score pattern", expanded=False):
+                try:
+                    scores = json.loads(row["normalized_scores"]) if row["normalized_scores"] else {}
+                    if scores:
+                        score_df = pd.DataFrame(
+                            {"Cluster": list(scores.keys()), "Fit %": list(scores.values())}
+                        ).sort_values("Fit %", ascending=False)
+                        st.bar_chart(score_df.set_index("Cluster"))
+                    else:
+                        st.info("No score data for this entry.")
+                except Exception:
+                    st.info("Could not read score data.")
+
+            with st.expander("AI roadmap", expanded=False):
+                if pd.notnull(row["final_ai_text"]) and str(row["final_ai_text"]).strip():
+                    st.write(row["final_ai_text"])
+                else:
+                    st.info("No saved roadmap for this entry.")
+
         card_end()
         st.stop()
 
