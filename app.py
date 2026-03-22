@@ -456,7 +456,7 @@ def init_db():
             """
         )
         def get_current_user_email():
-        return st.user.get("email", "") if st.user.is_logged_in else ""
+            return st.user.get("email", "") if st.user.is_logged_in else ""
 
 
     def load_profile(user_email):
