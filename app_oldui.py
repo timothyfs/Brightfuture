@@ -5,6 +5,28 @@ import streamlit as st
 import pandas as pd
 import os
 from openai import OpenAI
+st.markdown("""
+<style>
+.hero {
+    text-align: center;
+    padding: 30px 10px;
+}
+.hero h1 {
+    font-size: 2.8rem;
+    margin-bottom: 10px;
+}
+.hero p {
+    font-size: 1.2rem;
+    color: #666;
+}
+</style>
+
+<div class="hero">
+    <h1>✨ Bright Future</h1>
+    <p>Discover what you're naturally great at — and where it could take you</p>
+</div>
+""", unsafe_allow_html=True)
+
 DB_PATH = os.getenv("DB_PATH", "/tmp/career_bot.db")
 OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY", None)
 client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
@@ -14,73 +36,8 @@ def get_connection():
     return sqlite3.connect(DB_PATH, check_same_thread=False)
 
 
-
 st.set_page_config(page_title="Bright Future", page_icon="✨", layout="wide")
 
-APP_CSS = """
-<style>
-.hero-wrap {
-    text-align: center;
-    padding: 1.2rem 0 1.4rem 0;
-    margin-bottom: 0.6rem;
-}
-.hero-title {
-    font-size: 2.6rem;
-    font-weight: 800;
-    margin: 0;
-    letter-spacing: -0.02em;
-}
-.hero-subtitle {
-    font-size: 1.08rem;
-    color: #6b7280;
-    margin-top: 0.35rem;
-}
-.card {
-    background: rgba(255,255,255,0.92);
-    border: 1px solid rgba(0,0,0,0.06);
-    border-radius: 18px;
-    padding: 1rem 1rem 0.35rem 1rem;
-    margin: 0.5rem 0 1rem 0;
-    box-shadow: 0 6px 18px rgba(0,0,0,0.04);
-}
-.section-kicker {
-    font-size: 0.85rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: #7c3aed;
-    margin-bottom: 0.2rem;
-}
-.small-muted {
-    color: #6b7280;
-    font-size: 0.95rem;
-}
-</style>
-"""
-st.markdown(APP_CSS, unsafe_allow_html=True)
-
-def render_hero():
-    st.markdown(
-        """
-        <div class="hero-wrap">
-            <div class="hero-title">✨ Bright Future</div>
-            <div class="hero-subtitle">Discover what could excite, challenge, and inspire your future</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-def card_start(kicker=None, title=None, subtitle=None):
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    if kicker:
-        st.markdown(f'<div class="section-kicker">{kicker}</div>', unsafe_allow_html=True)
-    if title:
-        st.markdown(f"### {title}")
-    if subtitle:
-        st.markdown(f'<div class="small-muted">{subtitle}</div>', unsafe_allow_html=True)
-
-def card_end():
-    st.markdown('</div>', unsafe_allow_html=True)
 
 CAREER_CLUSTERS = {
     "Engineering & Technology": {
@@ -987,15 +944,13 @@ if "final_ai_text" not in st.session_state:
 if "deep_dive_text" not in st.session_state:
     st.session_state["deep_dive_text"] = None
 
-render_hero()
-st.markdown(
-    """
-    <div class="small-muted" style="text-align:center; margin-bottom:1rem;">
-        This is not about choosing a career today. It’s about discovering what energises you,
-        what you’re naturally good at, and what paths might lead to a future that feels meaningful and exciting.
-    </div>
-    """,
-    unsafe_allow_html=True,
+st.title("✨ Bright Future")
+st.subheader("Discover what could excite, challenge, and inspire your future")
+
+st.write(
+    "This is not about choosing a career today.\n\n"
+    "It’s about discovering what energises you, what you're naturally good at, "
+    "and what paths might lead to a future that feels meaningful and exciting."
 )
 
 with st.expander("How to use Bright Future"):
@@ -1033,7 +988,7 @@ st.sidebar.markdown(
 
 if page == "Start discovery":
     st.progress(25, text="Step 1 of 4 — Build your starting profile")
-    card_start("Step 1", "Discover your starting profile", "Start with instincts, not pressure. You can refine it in the next step.")
+    st.header("Discover your starting profile")
 
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -1111,8 +1066,6 @@ if page == "Start discovery":
                 st.session_state.pop(key, None)
             st.rerun()
 
-    card_end()
-
     if save_clicked:
         if not profile_name or not profile_code:
             st.error("Add a student name and profile code first.")
@@ -1177,7 +1130,6 @@ if page == "Start discovery":
 
         if st.session_state.get("followup_ready") and not st.session_state.get("roadmap_ready"):
             st.progress(60, text="Step 2 of 4 — Refine your profile")
-            card_start("Step 2", "Refine your profile", "A few smarter follow-up questions will help make the final reveal more accurate and more personal.")
             st.success("Great start. You’ve already revealed some strong signals.")
             st.info("Now let’s go a bit deeper before revealing your full Bright Future roadmap.")
 
@@ -1221,11 +1173,9 @@ if page == "Start discovery":
                 st.session_state["followup_ready"] = False
                 st.rerun()
 
-            card_end()
-
         if st.session_state.get("roadmap_ready"):
             st.progress(100, text="Step 3 of 4 — Your Bright Future reveal")
-            card_start("Step 3", "🌟 Your Bright Future", "Your strongest fit zones and roadmap are shown below. Open the sections that interest you most.")
+            st.markdown("## 🌟 Your Bright Future")
             st.write(
                 "This is your current best-fit direction based on how you think, what you enjoy, "
                 "and what seems to energise you most."
@@ -1319,10 +1269,9 @@ if page == "Start discovery":
                     "The goal is to explore, test, and learn. The clearer your actions, "
                     "the brighter your future becomes."
                 )
-            card_end()
 
 else:
-    card_start("Progress", "View your progress", "Look back at saved runs, compare changes over time, and revisit the combined picture.")
+    st.header("View your progress")
     profile_code_lookup = st.text_input("Enter profile code", placeholder="e.g. emma-2026")
 
     if profile_code_lookup:
@@ -1439,5 +1388,3 @@ else:
                         file_name=f"{profile_code_lookup}_career_profile.csv",
                         mime="text/csv",
                     )
-
-card_end()
