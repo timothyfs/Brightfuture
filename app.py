@@ -423,6 +423,7 @@ def init_db():
             """
             CREATE TABLE IF NOT EXISTS assessments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_email TEXT,
                 profile_name TEXT NOT NULL,
                 profile_code TEXT NOT NULL,
                 respondent_name TEXT,
@@ -442,6 +443,7 @@ def init_db():
             """
         )
         ensure_column_exists(conn, "assessments", "super_powers", "TEXT")
+        ensure_column_exists(conn, "assessments", "user_email", "TEXT")
         conn.commit()
         conn.close()
     except Exception as e:
@@ -456,10 +458,10 @@ def save_assessment(row):
         cur.execute(
             """
             INSERT INTO assessments (
-                profile_name, profile_code, respondent_name, respondent_role, relation_weight,
+                user_email, profile_name, profile_code, respondent_name, respondent_role, relation_weight,
                 target_age, country_focus, favourite_subjects, least_favourite_subjects,
                 dream_day, super_powers, raw_answers, raw_scores, normalized_scores, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             row,
         )
@@ -483,6 +485,52 @@ def load_assessments(profile_code):
     except Exception as e:
         st.error(f"Failed to load assessments: {e}")
         return pd.DataFrame()
+
+
+def load_user_profiles(user_email):
+    try:
+        conn = get_connection()
+        df = pd.read_sql_query(
+            """
+            SELECT
+                profile_code,
+                MAX(profile_name) AS profile_name,
+                MAX(target_age) AS target_age,
+                MAX(country_focus) AS country_focus,
+                MAX(created_at) AS last_updated,
+                COUNT(*) AS assessment_count
+            FROM assessments
+            WHERE user_email = ?
+            GROUP BY profile_code
+            ORDER BY last_updated DESC
+            """,
+            conn,
+            params=(user_email,),
+        )
+        conn.close()
+        return df
+    except Exception as e:
+        st.error(f"Failed to load user profiles: {e}")
+        return pd.DataFrame()
+
+
+def load_assessments_for_user(profile_code, user_email):
+    try:
+        conn = get_connection()
+        df = pd.read_sql_query(
+            "SELECT * FROM assessments WHERE profile_code = ? AND user_email = ? ORDER BY created_at DESC",
+            conn,
+            params=(profile_code, user_email),
+        )
+        conn.close()
+        return df
+    except Exception as e:
+        st.error(f"Failed to load assessments for user: {e}")
+        return pd.DataFrame()
+
+
+def current_user_email():
+    return st.user.get("email", "") if getattr(st, "user", None) and st.user.is_logged_in else ""
 
 
 def get_profile_history(profile_code):
@@ -1053,9 +1101,21 @@ st.sidebar.markdown(
     """
 )
 
+st.sidebar.markdown("---")
+st.sidebar.markdown("### Account")
+st.sidebar.write(f"Signed in as: {current_user_email() or st.user.get('email', 'Unknown user')}")
+
+if st.sidebar.button("Log out"):
+    st.logout()
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("### My data")
+st.sidebar.caption("Your saved profiles and history are now tied to your signed-in account.")
+
 if page == "Start discovery":
     st.progress(25, text="Step 1 of 4 — Build your starting profile")
     card_start("Step 1", "Discover your starting profile", "Start with instincts, not pressure. You can refine it in the next step.")
+    st.caption(f"Signed in as {current_user_email()}")
 
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -1157,6 +1217,7 @@ if page == "Start discovery":
             now = datetime.utcnow().isoformat(timespec="seconds")
             save_assessment(
                 (
+                    current_user_email(),
                     profile_name,
                     profile_code.lower().strip(),
                     respondent_name,
@@ -1275,6 +1336,7 @@ if page == "Start discovery":
 
             with st.expander("Compare with previous results", expanded=False):
                 history_df = get_profile_history(st.session_state["saved_profile_code"])
+                history_df = history_df[history_df["user_email"] == current_user_email()] if "user_email" in history_df.columns else history_df
                 comparison = compare_latest_to_previous(history_df)
 
                 if comparison is None:
@@ -1345,10 +1407,23 @@ if page == "Start discovery":
 
 else:
     card_start("Progress", "View your progress", "Look back at saved runs, compare changes over time, and revisit the combined picture.")
-    profile_code_lookup = st.text_input("Enter profile code", placeholder="e.g. emma-2026")
+    user_email = current_user_email()
+
+    my_profiles_df = load_user_profiles(user_email)
+
+    if my_profiles_df.empty:
+        st.info("You have no saved profiles yet. Start a discovery first.")
+        card_end()
+        st.stop()
+
+    with st.expander("My saved profiles", expanded=True):
+        st.dataframe(my_profiles_df, use_container_width=True)
+
+    profile_options = my_profiles_df["profile_code"].tolist()
+    profile_code_lookup = st.selectbox("Choose a saved profile", profile_options)
 
     if profile_code_lookup:
-        df = load_assessments(profile_code_lookup.lower().strip())
+        df = load_assessments_for_user(profile_code_lookup.lower().strip(), user_email)
         if df.empty:
             st.warning("No assessments found for that profile code yet.")
         else:
@@ -1390,6 +1465,7 @@ else:
 
                 with st.expander("History and comparison", expanded=False):
                     history_df = get_profile_history(profile_code_lookup.lower().strip())
+                    history_df = history_df[history_df["user_email"] == user_email] if "user_email" in history_df.columns else history_df
                     comparison = compare_latest_to_previous(history_df)
 
                     if comparison is None:
