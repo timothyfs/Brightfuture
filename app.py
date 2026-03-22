@@ -36,7 +36,7 @@ def get_connection():
     return sqlite3.connect(DB_PATH, check_same_thread=False)
 
 
-#st.set_page_config(page_title="Bright Future", page_icon="✨", layout="wide")
+st.set_page_config(page_title="Bright Future", page_icon="✨", layout="wide")
 
 
 CAREER_CLUSTERS = {
