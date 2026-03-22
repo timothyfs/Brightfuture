@@ -473,37 +473,70 @@ def get_current_user_email():
 
 
 def load_profile(user_email):
-    conn = get_connection()
-    df = pd.read_sql_query(
-        "SELECT * FROM profiles WHERE user_email = ?",
-        conn,
-        params=(user_email,),
-    )
-    conn.close()
-    return df
-
+    try:
+        conn = get_connection()
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS profiles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_email TEXT UNIQUE,
+                display_name TEXT,
+                target_age INTEGER,
+                country_focus TEXT,
+                created_at TEXT,
+                updated_at TEXT
+            )
+            """
+        )
+        df = pd.read_sql_query(
+            "SELECT * FROM profiles WHERE user_email = ?",
+            conn,
+            params=(user_email,),
+        )
+        conn.close()
+        return df
+    except Exception as e:
+        st.error(f"Failed to load profile: {e}")
+        return pd.DataFrame()
 
 def save_profile(user_email, name, age, country):
-    conn = get_connection()
-    cur = conn.cursor()
+    try:
+        conn = get_connection()
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS profiles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_email TEXT UNIQUE,
+                display_name TEXT,
+                target_age INTEGER,
+                country_focus TEXT,
+                created_at TEXT,
+                updated_at TEXT
+            )
+            """
+        )
 
-    now = datetime.utcnow().isoformat()
+        cur = conn.cursor()
+        now = datetime.utcnow().isoformat()
 
-    cur.execute(
-        """
-        INSERT INTO profiles (user_email, display_name, target_age, country_focus, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-        ON CONFLICT(user_email) DO UPDATE SET
-            display_name=excluded.display_name,
-            target_age=excluded.target_age,
-            country_focus=excluded.country_focus,
-            updated_at=excluded.updated_at
-        """,
-        (user_email, name, age, country, now, now),
-    )
+        cur.execute(
+            """
+            INSERT INTO profiles (user_email, display_name, target_age, country_focus, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_email) DO UPDATE SET
+                display_name=excluded.display_name,
+                target_age=excluded.target_age,
+                country_focus=excluded.country_focus,
+                updated_at=excluded.updated_at
+            """,
+            (user_email, name, age, country, now, now),
+        )
 
-    conn.commit()
-    conn.close()
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        st.error(f"Failed to save profile: {e}")
+        raise
 def save_assessment(row):
     try:
         conn = get_connection()
