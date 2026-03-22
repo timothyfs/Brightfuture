@@ -455,40 +455,6 @@ def init_db():
             )
             """
         )
-        def get_current_user_email():
-            return st.user.get("email", "") if st.user.is_logged_in else ""
-
-        def load_profile(user_email):
-            conn = get_connection()
-            df = pd.read_sql_query(
-                "SELECT * FROM profiles WHERE user_email = ?",
-                conn,
-                params=(user_email,),
-            )
-            conn.close()
-            return df
-
-    def save_profile(user_email, name, age, country):
-        conn = get_connection()
-        cur = conn.cursor()
-
-        now = datetime.utcnow().isoformat()
-
-        cur.execute(
-            """
-            INSERT INTO profiles (user_email, display_name, target_age, country_focus, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(user_email) DO UPDATE SET
-                display_name=excluded.display_name,
-                target_age=excluded.target_age,
-                country_focus=excluded.country_focus,
-                updated_at=excluded.updated_at
-            """,
-            (user_email, name, age, country, now, now),
-        )
-
-        conn.commit()
-        conn.close()
         ensure_column_exists(conn, "assessments", "super_powers", "TEXT")
         ensure_column_exists(conn, "assessments", "user_email", "TEXT")
         conn.commit()
@@ -496,6 +462,41 @@ def init_db():
     except Exception as e:
         st.error(f"Database initialization failed: {e}")
         raise
+
+
+def get_current_user_email():
+    return st.user.get("email", "") if st.user.is_logged_in else ""
+
+
+def load_profile(user_email):
+    conn = get_connection()
+    df = pd.read_sql_query(
+        "SELECT * FROM profiles WHERE user_email = ?",
+        conn,
+        params=(user_email,),
+    )
+    conn.close()
+    return df
+
+
+def save_profile(user_email, name, age, country):
+    conn = get_connection()
+    cur = conn.cursor()
+    now = datetime.utcnow().isoformat()
+    cur.execute(
+        """
+        INSERT INTO profiles (user_email, display_name, target_age, country_focus, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(user_email) DO UPDATE SET
+            display_name=excluded.display_name,
+            target_age=excluded.target_age,
+            country_focus=excluded.country_focus,
+            updated_at=excluded.updated_at
+        """,
+        (user_email, name, age, country, now, now),
+    )
+    conn.commit()
+    conn.close()
 
 def save_assessment(row):
     try:
