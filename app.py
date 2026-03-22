@@ -754,11 +754,7 @@ if profile_df.empty:
             st.info("We just need your name to get started 🙂")
 
     st.stop()
-if saved_profile is not None:
-    with st.expander("My profile", expanded=False):
-        st.write(f"**Name:** {saved_profile['display_name']}")
-        st.write(f"**Age:** {saved_profile['target_age']}")
-        st.write(f"**Country focus:** {saved_profile['country_focus']}")
+
 def apply_context_boost(raw_scores, favourite_subjects, least_subjects, dream_day, super_powers):
     positive_text = f"{favourite_subjects} {dream_day} {super_powers}".lower()
     negative_text = f"{least_subjects}".lower()
@@ -1243,6 +1239,12 @@ page = st.sidebar.radio("Your journey", ["Start discovery", "My Journey"])
 st.sidebar.markdown("---")
 st.sidebar.markdown("### Account")
 st.sidebar.write(f"Signed in as: {current_user_email() or st.user.get('email', 'Unknown user')}")
+if saved_profile is not None:
+    with st.expander("My profile", expanded=False):
+        st.write(f"**Name:** 👋 {saved_profile['display_name']}")
+        st.write(f"**Age:** {saved_profile['target_age']}")
+        st.write(f"**Country focus:** {saved_profile['country_focus']}")
+
 if st.sidebar.button("Log out"):
     st.logout()
 st.sidebar.markdown("---")
