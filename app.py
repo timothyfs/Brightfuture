@@ -439,6 +439,7 @@ def init_db():
                 raw_answers TEXT,
                 raw_scores TEXT,
                 normalized_scores TEXT,
+                final_ai_text TEXT,
                 created_at TEXT NOT NULL
             )
             """
@@ -460,6 +461,7 @@ def init_db():
 
         ensure_column_exists(conn, "assessments", "super_powers", "TEXT")
         ensure_column_exists(conn, "assessments", "user_email", "TEXT")
+        ensure_column_exists(conn, "assessments", "final_ai_text", "TEXT")
 
         conn.commit()
         conn.close()
@@ -546,8 +548,8 @@ def save_assessment(row):
             INSERT INTO assessments (
                 user_email, profile_name, profile_code, respondent_name, respondent_role, relation_weight,
                 target_age, country_focus, favourite_subjects, least_favourite_subjects,
-                dream_day, super_powers, raw_answers, raw_scores, normalized_scores, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                dream_day, super_powers, raw_answers, raw_scores, normalized_scores, final_ai_text, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             row,
         )
@@ -556,6 +558,7 @@ def save_assessment(row):
     except Exception as e:
         st.error(f"Failed to save assessment: {e}")
         raise
+
 
 def load_assessments(profile_code):
     try:
@@ -571,33 +574,6 @@ def load_assessments(profile_code):
         st.error(f"Failed to load assessments: {e}")
         return pd.DataFrame()
 
-def load_user_assessment_history(user_email):
-    try:
-        conn = get_connection()
-        df = pd.read_sql_query(
-            """
-            SELECT
-                id,
-                created_at,
-                profile_name,
-                respondent_role,
-                country_focus,
-                favourite_subjects,
-                dream_day,
-                normalized_scores,
-                final_ai_text
-            FROM assessments
-            WHERE user_email = ?
-            ORDER BY created_at DESC
-            """,
-            conn,
-            params=(user_email,),
-        )
-        conn.close()
-        return df
-    except Exception as e:
-        st.error(f"Failed to load journey history: {e}")
-        return pd.DataFrame()
 
 def load_user_profiles(user_email):
     try:
@@ -643,6 +619,54 @@ def load_assessments_for_user(profile_code, user_email):
 
 def current_user_email():
     return st.user.get("email", "") if getattr(st, "user", None) and st.user.is_logged_in else ""
+
+
+def load_user_assessment_history(user_email):
+    try:
+        conn = get_connection()
+        df = pd.read_sql_query(
+            """
+            SELECT
+                id,
+                created_at,
+                profile_name,
+                respondent_name,
+                respondent_role,
+                country_focus,
+                favourite_subjects,
+                dream_day,
+                normalized_scores,
+                final_ai_text
+            FROM assessments
+            WHERE user_email = ?
+            ORDER BY created_at DESC
+            """,
+            conn,
+            params=(user_email,),
+        )
+        conn.close()
+        return df
+    except Exception as e:
+        st.error(f"Failed to load journey history: {e}")
+        return pd.DataFrame()
+
+
+def update_assessment_ai_text(user_email, created_at, final_ai_text):
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE assessments
+            SET final_ai_text = ?
+            WHERE user_email = ? AND created_at = ?
+            """,
+            (final_ai_text, user_email, created_at),
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        st.error(f"Failed to update AI text: {e}")
 
 
 def get_profile_history(profile_code):
@@ -1181,6 +1205,8 @@ if "final_ai_text" not in st.session_state:
     st.session_state["final_ai_text"] = None
 if "deep_dive_text" not in st.session_state:
     st.session_state["deep_dive_text"] = None
+if "saved_created_at" not in st.session_state:
+    st.session_state["saved_created_at"] = None
 
 render_hero()
 st.markdown(
@@ -1322,6 +1348,7 @@ if page == "Start discovery":
                 "saved_answers",
                 "saved_normalized_scores",
                 "saved_respondent_role",
+                "saved_created_at",
             ]:
                 st.session_state.pop(key, None)
             st.rerun()
@@ -1365,10 +1392,12 @@ if page == "Start discovery":
                     json.dumps(answers),
                     json.dumps(raw_scores),
                     json.dumps(normalized_scores),
+                    None,
                     now,
                 )
             )
 
+            st.session_state["saved_created_at"] = now
             st.session_state["show_results"] = True
             st.session_state["followup_ready"] = True
             st.session_state["roadmap_ready"] = False
@@ -1433,6 +1462,11 @@ if page == "Start discovery":
                         followup_answers=followup_answers,
                     )
                 st.session_state["final_ai_text"] = ai_text
+                update_assessment_ai_text(
+                    current_user_email(),
+                    st.session_state.get("saved_created_at", ""),
+                    ai_text,
+                )
                 st.session_state["roadmap_ready"] = True
                 st.session_state["followup_ready"] = False
                 st.rerun()
@@ -1539,136 +1573,55 @@ if page == "Start discovery":
             card_end()
 
 else:
-    card_start("Progress", "View your progress", "Look back at saved runs, compare changes over time, and revisit the combined picture.")
+    card_start("Journey", "My Journey", "Revisit earlier runs, compare how your thinking changes, and reopen past roadmaps.")
     user_email = current_user_email()
+    history_df = load_user_assessment_history(user_email)
 
-    my_profiles_df = load_user_profiles(user_email)
-
-    if my_profiles_df.empty:
-        st.info("You have no saved profiles yet. Start a discovery first.")
+    if history_df.empty:
+        st.info("You have no saved journey entries yet. Start a discovery first.")
         card_end()
         st.stop()
 
-    with st.expander("My saved profiles", expanded=True):
-        st.dataframe(my_profiles_df, use_container_width=True)
+    history_df = history_df.copy()
+    history_df["entry_label"] = history_df.apply(
+        lambda row: f"{row['created_at']} — {row['respondent_role'] or 'Unknown role'}",
+        axis=1,
+    )
 
-    profile_options = my_profiles_df["profile_code"].tolist()
-    profile_code_lookup = st.selectbox("Choose a saved profile", profile_options)
+    with st.expander("My saved entries", expanded=True):
+        display_df = history_df[["created_at", "profile_name", "respondent_role", "country_focus"]].copy()
+        st.dataframe(display_df, use_container_width=True)
 
-    if profile_code_lookup:
-        df = load_assessments_for_user(profile_code_lookup.lower().strip(), user_email)
-        if df.empty:
-            st.warning("No assessments found for that profile code yet.")
+    selected_label = st.selectbox("Choose a past entry", history_df["entry_label"].tolist())
+    selected_row = history_df[history_df["entry_label"] == selected_label].iloc[0]
+
+    st.markdown("## Snapshot")
+    if pd.notnull(selected_row["profile_name"]):
+        st.write(f"**Name:** {selected_row['profile_name']}")
+    if pd.notnull(selected_row["country_focus"]):
+        st.write(f"**Country focus:** {selected_row['country_focus']}")
+    if pd.notnull(selected_row["favourite_subjects"]):
+        st.write(f"**Favourite subjects:** {selected_row['favourite_subjects']}")
+    if pd.notnull(selected_row["dream_day"]):
+        st.write(f"**Ideal working day:** {selected_row['dream_day']}")
+
+    with st.expander("Score pattern", expanded=False):
+        try:
+            scores = json.loads(selected_row["normalized_scores"]) if selected_row["normalized_scores"] else {}
+            if scores:
+                score_df = pd.DataFrame(
+                    {"Cluster": list(scores.keys()), "Fit %": list(scores.values())}
+                ).sort_values("Fit %", ascending=False)
+                st.bar_chart(score_df.set_index("Cluster"))
+            else:
+                st.info("No score data saved for this entry.")
+        except Exception:
+            st.info("Could not read score data for this entry.")
+
+    with st.expander("AI roadmap from this entry", expanded=True):
+        if pd.notnull(selected_row["final_ai_text"]) and str(selected_row["final_ai_text"]).strip():
+            st.write(selected_row["final_ai_text"])
         else:
-            st.subheader("Responses on file")
-            view_cols = [
-                "created_at",
-                "respondent_name",
-                "respondent_role",
-                "relation_weight",
-                "country_focus",
-                "favourite_subjects",
-                "least_favourite_subjects",
-            ]
-            if "super_powers" in df.columns:
-                view_cols.append("super_powers")
+            st.info("This entry does not yet have a saved AI roadmap.")
 
-            st.dataframe(df[view_cols].copy(), use_container_width=True)
-
-            aggregated = aggregate_scores(df)
-            if aggregated:
-                raw_avg, norm_avg = aggregated
-                st.subheader("Combined best-fit profile")
-                top = top_matches(norm_avg)
-
-                with st.expander("See combined fit zones", expanded=True):
-                    for i, (cluster, score) in enumerate(top, start=1):
-                        studies, universities = generate_study_advice(cluster, df.iloc[0]["country_focus"])
-                        st.markdown(f"### {i}. {cluster} — {score}% fit")
-                        st.write(CAREER_CLUSTERS[cluster]["description"])
-                        st.write("Likely further studies: " + ", ".join(studies[:5]))
-                        if universities:
-                            st.write("Starter university shortlist: " + ", ".join(universities[:4]))
-                        st.write("Career examples: " + ", ".join(CAREER_CLUSTERS[cluster]["examples"]))
-
-                    score_df = pd.DataFrame(
-                        {"Cluster": list(norm_avg.keys()), "Fit %": list(norm_avg.values())}
-                    ).sort_values("Fit %", ascending=False)
-                    st.bar_chart(score_df.set_index("Cluster"))
-
-                with st.expander("History and comparison", expanded=False):
-                    history_df = get_profile_history(profile_code_lookup.lower().strip())
-                    history_df = history_df[history_df["user_email"] == user_email] if "user_email" in history_df.columns else history_df
-                    comparison = compare_latest_to_previous(history_df)
-
-                    if comparison is None:
-                        st.info("No previous saved run yet for this profile.")
-                    else:
-                        st.write(
-                            f"Comparing latest result from **{comparison['latest_date']}** "
-                            f"with previous result from **{comparison['previous_date']}**"
-                        )
-                        st.dataframe(comparison["comparison_df"], use_container_width=True)
-
-                    history_chart_df = build_history_chart_df(history_df)
-                    if not history_chart_df.empty:
-                        pivot_df = history_chart_df.pivot(index="created_at", columns="Cluster", values="Fit %")
-                        st.line_chart(pivot_df)
-
-                with st.expander("AI interpretation of the combined profile", expanded=False):
-                    combined_answers = {
-                        "note": "This is a combined multi-observer profile. Interpret the weighted score pattern and the open-text inputs from the saved records."
-                    }
-
-                    combined_favourites = " | ".join(
-                        [str(x) for x in df["favourite_subjects"].dropna().tolist() if str(x).strip()]
-                    )
-                    combined_least = " | ".join(
-                        [str(x) for x in df["least_favourite_subjects"].dropna().tolist() if str(x).strip()]
-                    )
-                    combined_dream_day = " | ".join(
-                        [str(x) for x in df["dream_day"].dropna().tolist() if str(x).strip()]
-                    )
-                    combined_super_powers = ""
-                    if "super_powers" in df.columns:
-                        combined_super_powers = " | ".join(
-                            [str(x) for x in df["super_powers"].dropna().tolist() if str(x).strip()]
-                        )
-
-                    if st.button("Generate combined AI interpretation", key="generate_combined_ai"):
-                        with st.spinner("Generating combined AI interpretation..."):
-                            ai_text = get_ai_interpretation(
-                                profile_name=df.iloc[0]["profile_name"],
-                                age=int(df.iloc[0]["target_age"]) if pd.notnull(df.iloc[0]["target_age"]) else 16,
-                                country_focus=df.iloc[0]["country_focus"],
-                                favourite_subjects=combined_favourites,
-                                least_subjects=combined_least,
-                                dream_day=combined_dream_day,
-                                super_powers=combined_super_powers,
-                                answers=combined_answers,
-                                normalized_scores=norm_avg,
-                                respondent_role="Combined profile",
-                                followup_answers=None,
-                            )
-                        st.write(ai_text)
-
-                with st.expander("What to do next", expanded=False):
-                    st.markdown(
-                        """
-                        1. Take the top 2 or 3 clusters seriously, not just the top 1.
-                        2. Test each one with a real activity, shadowing experience, or short project.
-                        3. Re-run the assessment after that exposure. Teenagers change fast; their clarity improves with evidence.
-                        4. Build the university shortlist only after the career clusters and preferred subjects start to stabilise.
-                        """
-                    )
-
-                with st.expander("Raw data export", expanded=False):
-                    csv = df.to_csv(index=False).encode("utf-8")
-                    st.download_button(
-                        "Download profile data (CSV)",
-                        data=csv,
-                        file_name=f"{profile_code_lookup}_career_profile.csv",
-                        mime="text/csv",
-                    )
-
-card_end()
+    card_end()
