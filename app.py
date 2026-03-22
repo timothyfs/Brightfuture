@@ -17,6 +17,19 @@ def get_connection():
 
 st.set_page_config(page_title="Bright Future", page_icon="✨", layout="wide")
 
+def login_screen():
+    st.markdown("## 🔐 Bright Future is private")
+    st.write("Please sign in with Google to access your profiles and history.")
+
+    if st.button("Log in with Google"):
+        st.login()
+
+
+# --- AUTH GATE ---
+if not st.user.is_logged_in:
+    login_screen()
+    st.stop()
+
 APP_CSS = """
 <style>
 .hero-wrap {
@@ -1021,13 +1034,26 @@ if client is None:
 page = st.sidebar.radio("Your journey", ["Start discovery", "View your progress"])
 
 st.sidebar.markdown("---")
-st.sidebar.markdown("### What this is for")
+st.sidebar.markdown("### ✨ What this is for")
+
 st.sidebar.markdown(
     """
-    Bright Future helps students:
-    - understand themselves better
-    - explore possible futures
-    - build confidence without pressure
+    **Bright Future helps you:**
+
+    🔍 **Understand yourself**
+    - What energises you  
+    - How you think and work  
+
+    🚀 **Explore possibilities**
+    - Real career directions  
+    - Different study paths  
+
+    💪 **Build confidence**
+    - Without pressure  
+    - Without being boxed in  
+
+    ---
+    💡 *You don’t need all the answers. Just a better next step.*
     """
 )
 
