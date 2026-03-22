@@ -1240,10 +1240,10 @@ st.sidebar.markdown("---")
 st.sidebar.markdown("### Account")
 st.sidebar.write(f"Signed in as: {current_user_email() or st.user.get('email', 'Unknown user')}")
 if saved_profile is not None:
-    with st.expander("My profile", expanded=False):
-        st.write(f"**Name:** 👋 {saved_profile['display_name']}")
-        st.write(f"**Age:** {saved_profile['target_age']}")
-        st.write(f"**Country focus:** {saved_profile['country_focus']}")
+    with st.sidebar.expander("My profile", expanded=False):
+        st.sidebar.write(f"**Name:** 👋 {saved_profile['display_name']}")
+        st.sidebar.write(f"**Age:** {saved_profile['target_age']}")
+        st.sidebar.write(f"**Country focus:** {saved_profile['country_focus']}")
 
 if st.sidebar.button("Log out"):
     st.logout()
