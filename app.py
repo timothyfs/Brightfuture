@@ -621,6 +621,64 @@ def current_user_email():
     return st.user.get("email", "") if getattr(st, "user", None) and st.user.is_logged_in else ""
 
 
+HIGH_RISK_TERMS = [
+    "suicide",
+    "kill myself",
+    "self harm",
+    "self-harm",
+    "cut myself",
+    "hurt myself",
+    "starve myself",
+    "purge",
+    "abuse",
+    "overdose",
+    "hurt someone",
+    "how to make drugs",
+    "drug dealing",
+]
+
+
+def contains_high_risk_terms(text):
+    t = (text or "").lower()
+    return any(term in t for term in HIGH_RISK_TERMS)
+
+
+def moderate_text(text):
+    if not text or client is None:
+        return {"flagged": False, "categories": {}}
+
+    try:
+        result = client.moderations.create(
+            model="omni-moderation-latest",
+            input=text,
+        )
+        r = result.results[0]
+        categories = r.categories.model_dump() if hasattr(r.categories, "model_dump") else {}
+        return {"flagged": bool(r.flagged), "categories": categories}
+    except Exception:
+        return {"flagged": False, "categories": {}}
+
+
+def should_redirect_to_support(*texts):
+    combined_text = "\n".join([str(t) for t in texts if t])
+    if not combined_text.strip():
+        return False
+
+    if contains_high_risk_terms(combined_text):
+        return True
+
+    moderation = moderate_text(combined_text)
+    return bool(moderation.get("flagged", False))
+
+
+def show_sensitive_support_message():
+    st.warning(
+        "It sounds like something more important than career exploration may be going on right now. "
+        "Please talk to a trusted adult, parent, teacher, school counsellor, or local support service as soon as possible. "
+        "If anyone is in immediate danger, contact local emergency services now."
+    )
+
+
 def default_profile_code(user_email):
     if not user_email:
         return "default-profile"
@@ -1018,6 +1076,13 @@ Important:
 ## 10. Next 90 days
 Give exactly 3 concrete actions the student can take now.
 
+Safety rules:
+- Never shame, discourage, or use absolute language about a young person's future.
+- Never say someone is incapable, hopeless, or permanently unsuited to a path.
+- Never recommend illegal, dangerous, exploitative, self-harming, or medically unsafe actions.
+- If the user's text suggests self-harm, abuse, crisis, or immediate danger, do not continue normal career guidance. Instead encourage immediate support from a trusted adult or local emergency/crisis services.
+- Keep all advice exploratory, supportive, and non-definitive.
+
 Important rules:
 - Do not say "you should definitely become X"
 - Do not be overly rigid
@@ -1119,6 +1184,7 @@ Rules:
 - Avoid deterministic phrasing
 - Focus on surfacing personality, motivation, and preferences
 - Return only a valid JSON list of 5 strings
+- Do not ask questions that encourage risky, illegal, self-harming, or exploitative behaviour
 """
 
     try:
@@ -1191,6 +1257,7 @@ If the topic is about studies or universities:
 - include stretch / realistic / progression-based options where relevant
 - focus on pathways and examples
 - do not pretend admissions are guaranteed
+- if the text suggests self-harm, abuse, crisis, or immediate danger, do not continue normal guidance; encourage support from a trusted adult or local emergency/crisis services instead
 """
 
     try:
@@ -1380,6 +1447,11 @@ with st.expander("How to use Bright Future"):
         The goal is to get clearer, step by step.
         """
     )
+
+st.info(
+    "Bright Future is for exploration, not diagnosis. It offers ideas and patterns to explore, "
+    "not final verdicts about your future. If something here feels upsetting or serious, talk to a trusted adult."
+)
 
 if client is None:
     st.warning("AI interpretation is not active yet. Add OPENAI_API_KEY to Streamlit secrets to enable it.")
@@ -1616,6 +1688,17 @@ if page == "Start discovery":
             st.info("Now let’s go a bit deeper before revealing your full Bright Future roadmap.")
 
             st.markdown("## Level up your profile")
+
+            if should_redirect_to_support(
+                st.session_state["saved_favourite_subjects"],
+                st.session_state["saved_least_subjects"],
+                st.session_state["saved_dream_day"],
+                st.session_state["saved_super_powers"],
+            ):
+                show_sensitive_support_message()
+                card_end()
+                st.stop()
+
             followup_questions = get_ai_followup_questions(
                 profile_name=st.session_state["saved_profile_name"],
                 age=st.session_state["saved_age"],
@@ -1636,29 +1719,38 @@ if page == "Start discovery":
                 )
 
             if st.button("Reveal my Bright Future", key="generate_ai"):
-                with st.spinner("Building your roadmap..."):
-                    ai_text = get_ai_interpretation(
-                        profile_name=st.session_state["saved_profile_name"],
-                        age=st.session_state["saved_age"],
-                        country_focus=st.session_state["saved_country_focus"],
-                        favourite_subjects=st.session_state["saved_favourite_subjects"],
-                        least_subjects=st.session_state["saved_least_subjects"],
-                        dream_day=st.session_state["saved_dream_day"],
-                        super_powers=st.session_state["saved_super_powers"],
-                        answers=saved_answers,
-                        normalized_scores=normalized_scores,
-                        respondent_role=st.session_state["saved_respondent_role"],
-                        followup_answers=followup_answers,
+                if should_redirect_to_support(
+                    st.session_state["saved_favourite_subjects"],
+                    st.session_state["saved_least_subjects"],
+                    st.session_state["saved_dream_day"],
+                    st.session_state["saved_super_powers"],
+                    json.dumps(followup_answers),
+                ):
+                    show_sensitive_support_message()
+                else:
+                    with st.spinner("Building your roadmap..."):
+                        ai_text = get_ai_interpretation(
+                            profile_name=st.session_state["saved_profile_name"],
+                            age=st.session_state["saved_age"],
+                            country_focus=st.session_state["saved_country_focus"],
+                            favourite_subjects=st.session_state["saved_favourite_subjects"],
+                            least_subjects=st.session_state["saved_least_subjects"],
+                            dream_day=st.session_state["saved_dream_day"],
+                            super_powers=st.session_state["saved_super_powers"],
+                            answers=saved_answers,
+                            normalized_scores=normalized_scores,
+                            respondent_role=st.session_state["saved_respondent_role"],
+                            followup_answers=followup_answers,
+                        )
+                    st.session_state["final_ai_text"] = ai_text
+                    update_assessment_ai_text(
+                        current_user_email(),
+                        st.session_state.get("saved_created_at", ""),
+                        ai_text,
                     )
-                st.session_state["final_ai_text"] = ai_text
-                update_assessment_ai_text(
-                    current_user_email(),
-                    st.session_state.get("saved_created_at", ""),
-                    ai_text,
-                )
-                st.session_state["roadmap_ready"] = True
-                st.session_state["followup_ready"] = False
-                st.rerun()
+                    st.session_state["roadmap_ready"] = True
+                    st.session_state["followup_ready"] = False
+                    st.rerun()
 
             card_end()
 
@@ -1717,21 +1809,30 @@ if page == "Start discovery":
                     )
 
                     if st.button("Explore this topic", key="explore_topic"):
-                        with st.spinner("Exploring this topic..."):
-                            deep_dive_text = get_ai_deep_dive(
-                                topic=deep_dive_topic,
-                                profile_name=st.session_state["saved_profile_name"],
-                                age=st.session_state["saved_age"],
-                                country_focus=st.session_state["saved_country_focus"],
-                                favourite_subjects=st.session_state["saved_favourite_subjects"],
-                                least_subjects=st.session_state["saved_least_subjects"],
-                                dream_day=st.session_state["saved_dream_day"],
-                                super_powers=st.session_state["saved_super_powers"],
-                                answers=st.session_state["saved_answers"],
-                                normalized_scores=st.session_state["saved_normalized_scores"],
-                                final_ai_text=st.session_state["final_ai_text"],
-                            )
-                        st.session_state["deep_dive_text"] = deep_dive_text
+                        if should_redirect_to_support(
+                            st.session_state["saved_favourite_subjects"],
+                            st.session_state["saved_least_subjects"],
+                            st.session_state["saved_dream_day"],
+                            st.session_state["saved_super_powers"],
+                            deep_dive_topic,
+                        ):
+                            show_sensitive_support_message()
+                        else:
+                            with st.spinner("Exploring this topic..."):
+                                deep_dive_text = get_ai_deep_dive(
+                                    topic=deep_dive_topic,
+                                    profile_name=st.session_state["saved_profile_name"],
+                                    age=st.session_state["saved_age"],
+                                    country_focus=st.session_state["saved_country_focus"],
+                                    favourite_subjects=st.session_state["saved_favourite_subjects"],
+                                    least_subjects=st.session_state["saved_least_subjects"],
+                                    dream_day=st.session_state["saved_dream_day"],
+                                    super_powers=st.session_state["saved_super_powers"],
+                                    answers=st.session_state["saved_answers"],
+                                    normalized_scores=st.session_state["saved_normalized_scores"],
+                                    final_ai_text=st.session_state["final_ai_text"],
+                                )
+                            st.session_state["deep_dive_text"] = deep_dive_text
 
                     if st.session_state.get("deep_dive_text"):
                         st.markdown(f"### Deep dive: {deep_dive_topic}")
