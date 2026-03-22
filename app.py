@@ -442,6 +442,55 @@ def init_db():
             )
             """
         )
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS profiles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_email TEXT UNIQUE,
+                display_name TEXT,
+                target_age INTEGER,
+                country_focus TEXT,
+                created_at TEXT,
+                updated_at TEXT
+            )
+            """
+        )
+        def get_current_user_email():
+        return st.user.get("email", "") if st.user.is_logged_in else ""
+
+
+    def load_profile(user_email):
+        conn = get_connection()
+        df = pd.read_sql_query(
+            "SELECT * FROM profiles WHERE user_email = ?",
+            conn,
+            params=(user_email,),
+        )
+        conn.close()
+        return df
+
+
+    def save_profile(user_email, name, age, country):
+        conn = get_connection()
+        cur = conn.cursor()
+
+        now = datetime.utcnow().isoformat()
+
+        cur.execute(
+            """
+            INSERT INTO profiles (user_email, display_name, target_age, country_focus, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_email) DO UPDATE SET
+                display_name=excluded.display_name,
+                target_age=excluded.target_age,
+                country_focus=excluded.country_focus,
+                updated_at=excluded.updated_at
+            """,
+            (user_email, name, age, country, now, now),
+        )
+
+        conn.commit()
+        conn.close()
         ensure_column_exists(conn, "assessments", "super_powers", "TEXT")
         ensure_column_exists(conn, "assessments", "user_email", "TEXT")
         conn.commit()
@@ -449,7 +498,6 @@ def init_db():
     except Exception as e:
         st.error(f"Database initialization failed: {e}")
         raise
-
 
 def save_assessment(row):
     try:
@@ -595,7 +643,26 @@ def score_answers(answers):
     max_score = max(raw.values()) if raw else 1
     normalized = {k: round((v / max_score) * 100, 1) if max_score else 0 for k, v in raw.items()}
     return raw, normalized
+user_email = get_current_user_email()
+profile_df = load_profile(user_email)
 
+if profile_df.empty:
+    st.header("👋 Welcome to Bright Future")
+    st.write("Let's create your personal profile first.")
+
+    name = st.text_input("Your name")
+    age = st.number_input("Your age", 12, 25, 16)
+    country = st.selectbox("Where do you want to study?", ["France", "UK", "Switzerland"])
+
+    if st.button("Save my profile"):
+        if name:
+            save_profile(user_email, name, age, country)
+            st.success("Profile saved. You can now start your journey.")
+            st.rerun()
+        else:
+            st.error("Please enter your name")
+
+    st.stop()
 
 def apply_context_boost(raw_scores, favourite_subjects, least_subjects, dream_day, super_powers):
     positive_text = f"{favourite_subjects} {dream_day} {super_powers}".lower()
