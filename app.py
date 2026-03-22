@@ -621,6 +621,17 @@ def current_user_email():
     return st.user.get("email", "") if getattr(st, "user", None) and st.user.is_logged_in else ""
 
 
+def default_profile_code(user_email):
+    if not user_email:
+        return "default-profile"
+    base = user_email.split("@")[0].strip().lower()
+    safe = "".join(ch if ch.isalnum() else "-" for ch in base)
+    while "--" in safe:
+        safe = safe.replace("--", "-")
+    safe = safe.strip("-")
+    return f"{safe or 'default'}-profile"
+
+
 def load_user_assessment_history(user_email):
     try:
         conn = get_connection()
@@ -1245,6 +1256,37 @@ if saved_profile is not None:
         st.write(f"**Age:** {saved_profile['target_age']}")
         st.write(f"**Country focus:** {saved_profile['country_focus']}")
 
+    with st.sidebar.expander("Edit my profile", expanded=False):
+        edit_name = st.text_input(
+            "Your name",
+            value=str(saved_profile["display_name"] or ""),
+            key="sidebar_edit_name",
+        )
+        edit_age = st.number_input(
+            "Your age",
+            min_value=12,
+            max_value=25,
+            value=int(saved_profile["target_age"]) if pd.notnull(saved_profile["target_age"]) else 16,
+            key="sidebar_edit_age",
+        )
+        edit_countries = ["France", "UK", "Switzerland"]
+        current_country = str(saved_profile["country_focus"] or "France")
+        edit_country_index = edit_countries.index(current_country) if current_country in edit_countries else 0
+        edit_country = st.selectbox(
+            "Default country focus",
+            edit_countries,
+            index=edit_country_index,
+            key="sidebar_edit_country",
+        )
+
+        if st.button("Update profile", key="sidebar_update_profile"):
+            if edit_name.strip():
+                save_profile(current_user_email(), edit_name.strip(), int(edit_age), edit_country)
+                st.sidebar.success("Profile updated.")
+                st.rerun()
+            else:
+                st.sidebar.info("Just add your name to save the profile 🙂")
+
 if st.sidebar.button("Log out"):
     st.logout()
 st.sidebar.markdown("---")
@@ -1278,13 +1320,18 @@ if page == "Start discovery":
     card_start("Step 1", "Discover your starting profile", "Start with instincts, not pressure. You can refine it in the next step.")
     st.caption(f"Signed in as {current_user_email()}")
 
-    col1, col2, col3 = st.columns(3)
+    default_profile_name = str(saved_profile["display_name"]) if saved_profile is not None and pd.notnull(saved_profile["display_name"]) else ""
+    default_age = int(saved_profile["target_age"]) if saved_profile is not None and pd.notnull(saved_profile["target_age"]) else 16
+    default_country_focus = str(saved_profile["country_focus"]) if saved_profile is not None and pd.notnull(saved_profile["country_focus"]) else "France"
+    profile_code = default_profile_code(current_user_email())
+
+    st.caption("Your saved profile is used to pre-fill this discovery. You can change values for this run without changing your default profile.")
+
+    col1, col2 = st.columns(2)
     with col1:
-        profile_name = st.text_input("Student name", placeholder="e.g. Emma Smith")
+        profile_name = st.text_input("Student name", value=default_profile_name, placeholder="e.g. Emma Smith")
     with col2:
-        profile_code = st.text_input("Profile code", placeholder="e.g. emma-2026")
-    with col3:
-        age = st.number_input("Age", min_value=12, max_value=25, value=16)
+        age = st.number_input("Age", min_value=12, max_value=25, value=default_age)
 
     col4, col5, col6 = st.columns(3)
     with col4:
@@ -1295,7 +1342,9 @@ if page == "Start discovery":
             ["Self", "Parent", "Teacher", "Friend", "Coach/Mentor"],
         )
     with col6:
-        country_focus = st.selectbox("Country focus for studies", ["France", "UK", "Switzerland"])
+        country_options = ["France", "UK", "Switzerland"]
+        default_country_index = country_options.index(default_country_focus) if default_country_focus in country_options else 0
+        country_focus = st.selectbox("Country focus for studies", country_options, index=default_country_index)
 
     default_weight = role_default_weight(respondent_role)
     relation_weight = st.slider(
@@ -1358,7 +1407,7 @@ if page == "Start discovery":
     card_end()
 
     if save_clicked:
-        if not profile_name or not profile_code:
+        if not profile_name:
             st.info("Start by adding a name so we can personalise this for you")
         else:
             raw_scores, _ = score_answers(answers)
