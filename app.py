@@ -419,6 +419,7 @@ def init_db():
     try:
         conn = get_connection()
         cur = conn.cursor()
+
         cur.execute(
             """
             CREATE TABLE IF NOT EXISTS assessments (
@@ -442,6 +443,7 @@ def init_db():
             )
             """
         )
+
         cur.execute(
             """
             CREATE TABLE IF NOT EXISTS profiles (
@@ -455,8 +457,10 @@ def init_db():
             )
             """
         )
+
         ensure_column_exists(conn, "assessments", "super_powers", "TEXT")
         ensure_column_exists(conn, "assessments", "user_email", "TEXT")
+
         conn.commit()
         conn.close()
     except Exception as e:
@@ -482,7 +486,9 @@ def load_profile(user_email):
 def save_profile(user_email, name, age, country):
     conn = get_connection()
     cur = conn.cursor()
+
     now = datetime.utcnow().isoformat()
+
     cur.execute(
         """
         INSERT INTO profiles (user_email, display_name, target_age, country_focus, created_at, updated_at)
@@ -495,9 +501,9 @@ def save_profile(user_email, name, age, country):
         """,
         (user_email, name, age, country, now, now),
     )
+
     conn.commit()
     conn.close()
-
 def save_assessment(row):
     try:
         conn = get_connection()
