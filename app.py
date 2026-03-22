@@ -1079,14 +1079,10 @@ page = st.sidebar.radio("Your journey", ["Start discovery", "View your progress"
 st.sidebar.markdown("---")
 st.sidebar.markdown("### Account")
 st.sidebar.write(f"Signed in as: {current_user_email() or st.user.get('email', 'Unknown user')}")
-
 if st.sidebar.button("Log out"):
     st.logout()
-
-st.sidebar.markdown("---")
 st.sidebar.markdown("---")
 st.sidebar.markdown("### ✨ What this is for")
-
 st.sidebar.markdown(
     """
     **Bright Future helps you:**
@@ -1107,7 +1103,7 @@ st.sidebar.markdown(
     💡 *You don’t need all the answers. Just a better next step.*
     """
 )
-
+st.sidebar.markdown("---")
 st.sidebar.markdown("### My data")
 st.sidebar.caption("Your saved profiles and history are now tied to your signed-in account.")
 
