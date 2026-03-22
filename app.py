@@ -5,6 +5,27 @@ import streamlit as st
 import pandas as pd
 import os
 from openai import OpenAI
+st.markdown("""
+<style>
+.hero {
+    text-align: center;
+    padding: 30px 10px;
+}
+.hero h1 {
+    font-size: 2.8rem;
+    margin-bottom: 10px;
+}
+.hero p {
+    font-size: 1.2rem;
+    color: #666;
+}
+</style>
+
+<div class="hero">
+    <h1>✨ Bright Future</h1>
+    <p>Discover what you're naturally great at — and where it could take you</p>
+</div>
+""", unsafe_allow_html=True)
 
 DB_PATH = os.getenv("DB_PATH", "/tmp/career_bot.db")
 OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY", None)
