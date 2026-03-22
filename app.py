@@ -557,7 +557,6 @@ def save_assessment(row):
         st.error(f"Failed to save assessment: {e}")
         raise
 
-
 def load_assessments(profile_code):
     try:
         conn = get_connection()
@@ -572,6 +571,33 @@ def load_assessments(profile_code):
         st.error(f"Failed to load assessments: {e}")
         return pd.DataFrame()
 
+def load_user_assessment_history(user_email):
+    try:
+        conn = get_connection()
+        df = pd.read_sql_query(
+            """
+            SELECT
+                id,
+                created_at,
+                profile_name,
+                respondent_role,
+                country_focus,
+                favourite_subjects,
+                dream_day,
+                normalized_scores,
+                final_ai_text
+            FROM assessments
+            WHERE user_email = ?
+            ORDER BY created_at DESC
+            """,
+            conn,
+            params=(user_email,),
+        )
+        conn.close()
+        return df
+    except Exception as e:
+        st.error(f"Failed to load journey history: {e}")
+        return pd.DataFrame()
 
 def load_user_profiles(user_email):
     try:
@@ -1187,7 +1213,7 @@ with st.expander("How to use Bright Future"):
 if client is None:
     st.warning("AI interpretation is not active yet. Add OPENAI_API_KEY to Streamlit secrets to enable it.")
 
-page = st.sidebar.radio("Your journey", ["Start discovery", "View your progress"])
+page = st.sidebar.radio("Your journey", ["Start discovery", "My Journey"])
 st.sidebar.markdown("---")
 st.sidebar.markdown("### Account")
 st.sidebar.write(f"Signed in as: {current_user_email() or st.user.get('email', 'Unknown user')}")
