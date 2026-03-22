@@ -1076,7 +1076,14 @@ if client is None:
     st.warning("AI interpretation is not active yet. Add OPENAI_API_KEY to Streamlit secrets to enable it.")
 
 page = st.sidebar.radio("Your journey", ["Start discovery", "View your progress"])
+st.sidebar.markdown("---")
+st.sidebar.markdown("### Account")
+st.sidebar.write(f"Signed in as: {current_user_email() or st.user.get('email', 'Unknown user')}")
 
+if st.sidebar.button("Log out"):
+    st.logout()
+
+st.sidebar.markdown("---")
 st.sidebar.markdown("---")
 st.sidebar.markdown("### ✨ What this is for")
 
@@ -1101,14 +1108,6 @@ st.sidebar.markdown(
     """
 )
 
-st.sidebar.markdown("---")
-st.sidebar.markdown("### Account")
-st.sidebar.write(f"Signed in as: {current_user_email() or st.user.get('email', 'Unknown user')}")
-
-if st.sidebar.button("Log out"):
-    st.logout()
-
-st.sidebar.markdown("---")
 st.sidebar.markdown("### My data")
 st.sidebar.caption("Your saved profiles and history are now tied to your signed-in account.")
 
