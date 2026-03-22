@@ -1721,7 +1721,7 @@ st.info(
 if client is None:
     st.warning("AI interpretation is not active yet. Add OPENAI_API_KEY to Streamlit secrets to enable it.")
 
-language = st.sidebar.selectbox(tr("English", "language_label"), ["English", "Français"])
+#language = st.sidebar.selectbox(tr("English", "language_label"), ["English", "Français"])
 page = st.sidebar.radio(tr(language, "journey_label"), [tr(language, "start_discovery"), tr(language, "my_journey")])
 st.sidebar.markdown("---")
 st.sidebar.markdown(f"### {tr(language, 'account')}")
