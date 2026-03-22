@@ -458,17 +458,15 @@ def init_db():
         def get_current_user_email():
             return st.user.get("email", "") if st.user.is_logged_in else ""
 
-
-    def load_profile(user_email):
-        conn = get_connection()
-        df = pd.read_sql_query(
-            "SELECT * FROM profiles WHERE user_email = ?",
-            conn,
-            params=(user_email,),
-        )
-        conn.close()
-        return df
-
+        def load_profile(user_email):
+            conn = get_connection()
+            df = pd.read_sql_query(
+                "SELECT * FROM profiles WHERE user_email = ?",
+                conn,
+                params=(user_email,),
+            )
+            conn.close()
+            return df
 
     def save_profile(user_email, name, age, country):
         conn = get_connection()
