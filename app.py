@@ -673,8 +673,9 @@ def should_redirect_to_support(*texts):
 
 def show_sensitive_support_message():
     st.warning(
-        "It sounds like something more important than career exploration may be going on right now. "
-        "Please talk to a trusted adult, parent, teacher, school counsellor, or local support service as soon as possible. "
+        "Some of what you’ve written touches on sensitive topics. "
+        "If you’re exploring careers that help people in difficult situations, that’s meaningful, and we can still help with that. "
+        "If this is personal or affecting you directly, it’s important to talk to a trusted adult, parent, teacher, school counsellor, or local support service. "
         "If anyone is in immediate danger, contact local emergency services now."
     )
 
