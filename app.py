@@ -683,7 +683,9 @@ def score_answers(answers):
     return raw, normalized
 user_email = get_current_user_email()
 profile_df = load_profile(user_email)
-
+saved_profile = None
+if not profile_df.empty:
+    saved_profile = profile_df.iloc[0]
 if profile_df.empty:
     st.header("👋 Welcome to Bright Future")
     st.write("Let's create your personal profile first.")
@@ -701,7 +703,11 @@ if profile_df.empty:
             st.error("Please enter your name")
 
     st.stop()
-
+if saved_profile is not None:
+    with st.expander("My profile", expanded=False):
+        st.write(f"**Name:** {saved_profile['display_name']}")
+        st.write(f"**Age:** {saved_profile['target_age']}")
+        st.write(f"**Country focus:** {saved_profile['country_focus']}")
 def apply_context_boost(raw_scores, favourite_subjects, least_subjects, dream_day, super_powers):
     positive_text = f"{favourite_subjects} {dream_day} {super_powers}".lower()
     negative_text = f"{least_subjects}".lower()
