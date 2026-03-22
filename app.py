@@ -1,10 +1,9 @@
 import sqlite3
 import json
 from datetime import datetime
-import os
-
-import pandas as pd
 import streamlit as st
+import pandas as pd
+import os
 from openai import OpenAI
 
 DB_PATH = os.getenv("DB_PATH", "/tmp/career_bot.db")
@@ -17,6 +16,7 @@ def get_connection():
 
 
 st.set_page_config(page_title="Bright Future", page_icon="✨", layout="wide")
+
 
 CAREER_CLUSTERS = {
     "Engineering & Technology": {
@@ -112,6 +112,7 @@ CAREER_CLUSTERS = {
         ],
     },
 }
+
 
 QUESTIONS = [
     {
@@ -244,6 +245,7 @@ QUESTIONS = [
     },
 ]
 
+
 UNIVERSITY_DATA = {
     "UK": {
         "Engineering & Technology": [
@@ -332,6 +334,14 @@ UNIVERSITY_DATA = {
 }
 
 
+def ensure_column_exists(conn, table_name, column_name, column_def):
+    cur = conn.cursor()
+    cur.execute(f"PRAGMA table_info({table_name})")
+    existing = [row[1] for row in cur.fetchall()]
+    if column_name not in existing:
+        cur.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_def}")
+
+
 def init_db():
     try:
         conn = get_connection()
@@ -350,6 +360,7 @@ def init_db():
                 favourite_subjects TEXT,
                 least_favourite_subjects TEXT,
                 dream_day TEXT,
+                super_powers TEXT,
                 raw_answers TEXT,
                 raw_scores TEXT,
                 normalized_scores TEXT,
@@ -357,6 +368,7 @@ def init_db():
             )
             """
         )
+        ensure_column_exists(conn, "assessments", "super_powers", "TEXT")
         conn.commit()
         conn.close()
     except Exception as e:
@@ -373,8 +385,8 @@ def save_assessment(row):
             INSERT INTO assessments (
                 profile_name, profile_code, respondent_name, respondent_role, relation_weight,
                 target_age, country_focus, favourite_subjects, least_favourite_subjects,
-                dream_day, raw_answers, raw_scores, normalized_scores, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                dream_day, super_powers, raw_answers, raw_scores, normalized_scores, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             row,
         )
@@ -406,8 +418,7 @@ def get_profile_history(profile_code):
         return df
     df = df.copy()
     df["created_at_dt"] = pd.to_datetime(df["created_at"], errors="coerce")
-    df = df.sort_values("created_at_dt")
-    return df
+    return df.sort_values("created_at_dt")
 
 
 def compare_latest_to_previous(df):
@@ -421,21 +432,20 @@ def compare_latest_to_previous(df):
     latest_scores = json.loads(latest["normalized_scores"])
     previous_scores = json.loads(previous["normalized_scores"])
 
-    comparison_rows = []
+    rows = []
     for cluster in CAREER_CLUSTERS.keys():
         latest_val = float(latest_scores.get(cluster, 0))
         previous_val = float(previous_scores.get(cluster, 0))
-        delta = round(latest_val - previous_val, 1)
-        comparison_rows.append(
+        rows.append(
             {
                 "Cluster": cluster,
                 "Previous %": previous_val,
                 "Latest %": latest_val,
-                "Change": delta,
+                "Change": round(latest_val - previous_val, 1),
             }
         )
 
-    comp_df = pd.DataFrame(comparison_rows).sort_values("Latest %", ascending=False)
+    comp_df = pd.DataFrame(rows).sort_values("Latest %", ascending=False)
     return {
         "latest_date": latest["created_at"],
         "previous_date": previous["created_at"],
@@ -448,19 +458,10 @@ def build_history_chart_df(df):
         return pd.DataFrame()
 
     rows = []
-    df = df.copy().sort_values("created_at")
-
-    for _, row in df.iterrows():
+    for _, row in df.sort_values("created_at").iterrows():
         scores = json.loads(row["normalized_scores"])
         for cluster, score in scores.items():
-            rows.append(
-                {
-                    "created_at": row["created_at"],
-                    "Cluster": cluster,
-                    "Fit %": score,
-                }
-            )
-
+            rows.append({"created_at": row["created_at"], "Cluster": cluster, "Fit %": score})
     return pd.DataFrame(rows)
 
 
@@ -475,35 +476,35 @@ def score_answers(answers):
     return raw, normalized
 
 
-def apply_context_boost(raw_scores, favourite_subjects, least_subjects, dream_day):
-    positive_text = f"{favourite_subjects} {dream_day}".lower()
+def apply_context_boost(raw_scores, favourite_subjects, least_subjects, dream_day, super_powers):
+    positive_text = f"{favourite_subjects} {dream_day} {super_powers}".lower()
     negative_text = f"{least_subjects}".lower()
 
     positive_keywords = {
         "Creative & Design": [
             "art", "design", "drawing", "fashion", "media", "photography",
             "film", "writing", "creative", "architecture", "music", "drama",
-            "illustration", "animation", "theatre",
+            "illustration", "animation", "theatre", "dyslexia", "visual"
         ],
         "Engineering & Technology": [
             "math", "physics", "coding", "computer", "engineering",
-            "robotics", "technology", "mechanical", "software",
+            "robotics", "technology", "mechanical", "software", "building"
         ],
         "Research & Analysis": [
             "economics", "science", "research", "analysis", "data",
-            "history", "politics", "geography",
+            "history", "politics", "geography", "curiosity"
         ],
         "People, Health & Education": [
             "biology", "psychology", "teaching", "helping", "health",
-            "medicine", "children", "care",
+            "medicine", "children", "care", "empathy", "listening"
         ],
         "Business, Law & Leadership": [
             "business", "law", "debate", "leadership", "entrepreneurship",
-            "management", "public speaking",
+            "management", "public speaking", "persuasion"
         ],
         "Operations, Finance & Project Delivery": [
             "finance", "accounting", "organisation", "planning",
-            "project", "logistics", "spreadsheet",
+            "project", "logistics", "spreadsheet", "discipline"
         ],
     }
 
@@ -577,6 +578,7 @@ def build_ai_prompt(
     favourite_subjects,
     least_subjects,
     dream_day,
+    super_powers,
     answers,
     normalized_scores,
     respondent_role=None,
@@ -589,14 +591,21 @@ You are an outstanding career discovery adviser for teenagers.
 
 Your role is to help a young person understand themselves, see realistic possibilities, and feel encouraged about the future.
 
+You must combine:
+- grounded advice
+- practical next steps
+- future awareness
+- emotional intelligence
+- encouragement without false promises
+
+You are NOT allowed to sound elitist, rigid, snobbish, or deterministic.
+You must NOT imply that only traditional prestige careers matter.
+You must NOT frame success as “doctor, lawyer, engineer or failure.”
+You must recognise that meaningful, stimulating, respected careers can exist in many forms.
+
 The aptitude results are the foundation of the analysis.
 Use the score pattern as the primary structure, then use the follow-up answers to confirm, refine, or challenge the initial picture.
-
-Be concise, sharp, motivating, and practical.
-Do NOT ramble.
-Do NOT give a huge report.
-Do NOT try to cover everything.
-Prioritise clarity over completeness.
+When the aptitude results and follow-up answers point in different directions, explain the tension clearly instead of forcing a simplistic answer.
 
 Profile:
 - Name: {profile_name}
@@ -608,6 +617,7 @@ Structured inputs:
 - Favourite subjects: {favourite_subjects}
 - Least favourite subjects: {least_subjects}
 - Ideal working day: {dream_day}
+- Possible super powers / hidden strengths / traits that may matter: {super_powers}
 
 Question responses:
 {json.dumps(answers, indent=2)}
@@ -621,56 +631,113 @@ Top cluster scores:
 All normalized scores:
 {json.dumps(normalized_scores, indent=2)}
 
-Return your answer using these exact headings only:
+Please return your answer using the exact section headings below.
 
-## 1. Big-picture encouragement
-Write a short opening that feels encouraging, grounded, and intelligent.
-Help the student feel possibility, not pressure.
+## 1. Encouraging big-picture message
+Start with a short, warm, intelligent message.
+It should help the student feel optimistic, capable, and open-minded.
 
-## 2. What seems strongest in this profile
-Give a short summary of:
-- strongest strengths
-- likely motivations
-- what kind of environments may suit this person
+## 2. Core profile summary
+Summarise the student's likely strengths, motivations, working style, and what seems to energise them.
+Explain what kind of environments may suit them.
+Be clear about both strengths and tensions.
 
-Keep it to one short paragraph.
-
-## 3. Three strong future directions
-Give exactly 3 directions.
-For each one include:
+## 3. Best-fit stimulating career directions
+Give exactly 3 to 4 career directions.
+For each include:
 - Why it fits
 - Example roles
-- Why it could stay stimulating
+- Why it may stay stimulating
 
-Keep each direction concise.
+## 4. Practical school roadmap
+Explain:
+- Which school subjects matter most now
+- Which academic strengths to build now
+- Which bac specialities or school profile may make sense where relevant
+- What level of academic ambition to aim for
+- Give practical guidance on marks and performance bands to target, but do not pretend exact admissions cutoffs are guaranteed
 
-## 4. What to focus on now
-Give practical guidance on:
-- school subjects to prioritise
-- what to improve over the next 12 months
-- useful habits or strengths to build
+If the country focus is France:
+- Refer naturally to lycée, spécialités and baccalauréat where relevant
+- Be realistic and practical
+- Do not invent fake official thresholds
 
-Be concrete.
+## 5. Higher education routes to explore
+Suggest realistic higher-education paths relevant to the country focus.
+Use three buckets where relevant:
+- stretch options
+- strong realistic options
+- applied / progression-based options
 
-## 5. AI: threat or advantage?
-For each of the 3 directions, give:
-- AI replacement risk score out of 10
-- AI enablement value score out of 10
-- one short sentence explaining the difference
+Include route types such as:
+- university
+- BUT / BTS
+- prépa
+- grande école
+- design school
+- specialist school
+- apprenticeships
+- work-linked routes
 
-Be balanced. AI is not just replacement.
+Also include example institutions to explore, making clear they are examples, not guarantees.
 
-## 6. Next 90 days
-Give exactly 3 practical next actions.
+## 6. Internships and real-world exposure
+Suggest practical, age-appropriate environments to explore:
+- companies
+- studios
+- labs
+- public bodies
+- NGOs
+- workshops
+- shadowing or project settings
+
+## 7. Skills to build outside school
+Suggest useful extracurriculars such as:
+- sports
+- creative work
+- competitions
+- clubs
+- coding projects
+- portfolio work
+- volunteering
+- public speaking
+- teamwork
+- personal projects
+
+Explain why these matter for this profile.
+
+## 8. Super powers and hidden strengths
+Interpret the “super powers” input with care.
+Do not diagnose anything.
+Do not medicalise unnecessarily.
+Instead explain how unusual traits, energy, empathy, resilience, dyslexia-style thinking, ADHD-style energy, sports discipline, pattern recognition, creativity, or social instinct could become strengths in the right environment.
+Also mention the kinds of work or roles where these qualities may become an advantage.
+
+## 9. AI outlook for each direction
+For each career direction, provide:
+- AI replacement risk score from 1 to 10
+- AI enablement value score from 1 to 10
+- A short explanation of how AI is likely to change the field
+- A short explanation of how learning AI tools could strengthen the student's future performance in that field
+
+Important:
+- Do NOT present AI as simple replacement
+- Show where AI is a tool, amplifier, co-pilot, or productivity layer
+- Be balanced and realistic
+
+## 10. Next 90 days
+Give exactly 3 concrete actions the student can take now.
 
 Important rules:
 - Do not say "you should definitely become X"
 - Do not be overly rigid
-- Do not sound elitist or snobbish
-- Do not imply only traditional prestige careers matter
+- Be practical, nuanced, and future-aware
+- Be specific and concrete
+- Avoid generic career advice
 - If creative signals are strong, do not default to business or law unless clearly dominant
 - Treat creative + analytical or creative + leadership combinations as potentially powerful hybrids
-- Keep the whole response compact, useful, and energising
+- Keep the tone encouraging and grounded
+- Make the student feel possibility, not pressure
 """
 
 
@@ -681,6 +748,7 @@ def get_ai_interpretation(
     favourite_subjects,
     least_subjects,
     dream_day,
+    super_powers,
     answers,
     normalized_scores,
     respondent_role=None,
@@ -696,6 +764,7 @@ def get_ai_interpretation(
         favourite_subjects=favourite_subjects,
         least_subjects=least_subjects,
         dream_day=dream_day,
+        super_powers=super_powers,
         answers=answers,
         normalized_scores=normalized_scores,
         respondent_role=respondent_role,
@@ -703,10 +772,7 @@ def get_ai_interpretation(
     )
 
     try:
-        response = client.responses.create(
-            model="gpt-4.1-mini",
-            input=prompt,
-        )
+        response = client.responses.create(model="gpt-4.1-mini", input=prompt)
         return response.output_text
     except Exception as e:
         return f"AI interpretation failed: {e}"
@@ -719,6 +785,7 @@ def get_ai_followup_questions(
     favourite_subjects,
     least_subjects,
     dream_day,
+    super_powers,
     answers,
     normalized_scores,
 ):
@@ -727,7 +794,7 @@ def get_ai_followup_questions(
         "Do you prefer creating something new, solving a problem, or helping someone?",
         "What school tasks feel most natural to you?",
         "What kind of people or environments energise you most?",
-        "If nobody judged you, what would you be most excited to explore next?",
+        "What is one thing about you that people often misunderstand, but could actually be a strength?",
     ]
 
     if client is None:
@@ -742,6 +809,7 @@ Based on this profile, generate exactly 5 smart follow-up questions that will he
 - people vs systems orientation
 - creative identity
 - appetite for leadership, structure, and uncertainty
+- possible hidden strengths or “super powers”
 
 Profile:
 - Name: {profile_name}
@@ -750,6 +818,7 @@ Profile:
 - Favourite subjects: {favourite_subjects}
 - Least favourite subjects: {least_subjects}
 - Dream day: {dream_day}
+- Super powers / strengths / unusual traits: {super_powers}
 - Answers: {json.dumps(answers)}
 - Scores: {json.dumps(normalized_scores)}
 
@@ -763,10 +832,7 @@ Rules:
 """
 
     try:
-        response = client.responses.create(
-            model="gpt-4.1-mini",
-            input=prompt,
-        )
+        response = client.responses.create(model="gpt-4.1-mini", input=prompt)
         text = response.output_text.strip()
         questions = json.loads(text)
         if isinstance(questions, list) and len(questions) == 5:
@@ -784,6 +850,7 @@ def get_ai_deep_dive(
     favourite_subjects,
     least_subjects,
     dream_day,
+    super_powers,
     answers,
     normalized_scores,
     final_ai_text="",
@@ -801,6 +868,7 @@ Student profile:
 - Favourite subjects: {favourite_subjects}
 - Least favourite subjects: {least_subjects}
 - Ideal working day: {dream_day}
+- Super powers / hidden strengths / unusual traits: {super_powers}
 
 Aptitude answers:
 {json.dumps(answers, indent=2)}
@@ -830,15 +898,13 @@ If the topic is about AI, explain both:
 - how AI can be used as an advantage in that field
 
 If the topic is about studies or universities:
+- include stretch / realistic / progression-based options where relevant
 - focus on pathways and examples
 - do not pretend admissions are guaranteed
 """
 
     try:
-        response = client.responses.create(
-            model="gpt-4.1-mini",
-            input=prompt,
-        )
+        response = client.responses.create(model="gpt-4.1-mini", input=prompt)
         return response.output_text
     except Exception as e:
         return f"Deep-dive AI failed: {e}"
@@ -848,24 +914,14 @@ init_db()
 
 if "show_results" not in st.session_state:
     st.session_state["show_results"] = False
-
 if "followup_ready" not in st.session_state:
     st.session_state["followup_ready"] = False
-
 if "roadmap_ready" not in st.session_state:
     st.session_state["roadmap_ready"] = False
-
 if "final_ai_text" not in st.session_state:
     st.session_state["final_ai_text"] = None
-
 if "deep_dive_text" not in st.session_state:
     st.session_state["deep_dive_text"] = None
-
-if "deep_dive_ready" not in st.session_state:
-    st.session_state["deep_dive_ready"] = False
-
-if "active_country_focus" not in st.session_state:
-    st.session_state["active_country_focus"] = "France"
 
 st.title("✨ Bright Future")
 st.subheader("Discover what could excite, challenge, and inspire your future")
@@ -945,9 +1001,9 @@ if page == "Start discovery":
     st.subheader("Tell us how this person tends to think and work")
     st.caption("1 = strongly disagree, 5 = strongly agree")
     answers = {}
-    qcols = st.columns(2)
+    qcols = st.columns(1)
     for idx, q in enumerate(QUESTIONS):
-        with qcols[idx % 2]:
+        with qcols[0]:
             answers[q["key"]] = st.slider(q["label"], 1, 5, 3, key=f"{respondent_role}_{q['key']}_{idx}")
 
     st.subheader("A little more context")
@@ -956,6 +1012,11 @@ if page == "Start discovery":
     dream_day = st.text_area(
         "Describe an ideal working day",
         placeholder="What would they be doing? Working with people, ideas, data, design, machines...",
+    )
+    super_powers = st.text_area(
+        "Possible super powers or hidden strengths",
+        placeholder="Examples: unusual energy, empathy, resilience, dyslexia-style thinking, ADHD-style energy, sports discipline, creativity, pattern recognition, social instinct...",
+        help="This is not for diagnosis. It is for strengths that may matter, especially things that are often misunderstood.",
     )
 
     col_a, col_b = st.columns([3, 1])
@@ -968,8 +1029,6 @@ if page == "Start discovery":
             st.session_state["roadmap_ready"] = False
             st.session_state["final_ai_text"] = None
             st.session_state["deep_dive_text"] = None
-            st.session_state["deep_dive_ready"] = False
-            st.session_state["active_country_focus"] = "France"
             for key in [
                 "saved_profile_name",
                 "saved_profile_code",
@@ -978,6 +1037,7 @@ if page == "Start discovery":
                 "saved_favourite_subjects",
                 "saved_least_subjects",
                 "saved_dream_day",
+                "saved_super_powers",
                 "saved_answers",
                 "saved_normalized_scores",
                 "saved_respondent_role",
@@ -995,6 +1055,7 @@ if page == "Start discovery":
                 favourite_subjects=favourite_subjects,
                 least_subjects=least_subjects,
                 dream_day=dream_day,
+                super_powers=super_powers,
             )
 
             max_score = max(raw_scores.values()) if raw_scores else 1
@@ -1016,6 +1077,7 @@ if page == "Start discovery":
                     favourite_subjects,
                     least_subjects,
                     dream_day,
+                    super_powers,
                     json.dumps(answers),
                     json.dumps(raw_scores),
                     json.dumps(normalized_scores),
@@ -1028,16 +1090,15 @@ if page == "Start discovery":
             st.session_state["roadmap_ready"] = False
             st.session_state["final_ai_text"] = None
             st.session_state["deep_dive_text"] = None
-            st.session_state["deep_dive_ready"] = False
 
             st.session_state["saved_profile_name"] = profile_name
             st.session_state["saved_profile_code"] = profile_code.lower().strip()
             st.session_state["saved_age"] = age
             st.session_state["saved_country_focus"] = country_focus
-            st.session_state["active_country_focus"] = country_focus
             st.session_state["saved_favourite_subjects"] = favourite_subjects
             st.session_state["saved_least_subjects"] = least_subjects
             st.session_state["saved_dream_day"] = dream_day
+            st.session_state["saved_super_powers"] = super_powers
             st.session_state["saved_answers"] = answers
             st.session_state["saved_normalized_scores"] = normalized_scores
             st.session_state["saved_respondent_role"] = respondent_role
@@ -1055,10 +1116,11 @@ if page == "Start discovery":
             followup_questions = get_ai_followup_questions(
                 profile_name=st.session_state["saved_profile_name"],
                 age=st.session_state["saved_age"],
-                country_focus=st.session_state["active_country_focus"],
+                country_focus=st.session_state["saved_country_focus"],
                 favourite_subjects=st.session_state["saved_favourite_subjects"],
                 least_subjects=st.session_state["saved_least_subjects"],
                 dream_day=st.session_state["saved_dream_day"],
+                super_powers=st.session_state["saved_super_powers"],
                 answers=saved_answers,
                 normalized_scores=normalized_scores,
             )
@@ -1075,10 +1137,11 @@ if page == "Start discovery":
                     ai_text = get_ai_interpretation(
                         profile_name=st.session_state["saved_profile_name"],
                         age=st.session_state["saved_age"],
-                        country_focus=st.session_state["active_country_focus"],
+                        country_focus=st.session_state["saved_country_focus"],
                         favourite_subjects=st.session_state["saved_favourite_subjects"],
                         least_subjects=st.session_state["saved_least_subjects"],
                         dream_day=st.session_state["saved_dream_day"],
+                        super_powers=st.session_state["saved_super_powers"],
                         answers=saved_answers,
                         normalized_scores=normalized_scores,
                         respondent_role=st.session_state["saved_respondent_role"],
@@ -1092,21 +1155,6 @@ if page == "Start discovery":
         if st.session_state.get("roadmap_ready"):
             st.progress(100, text="Step 3 of 4 — Your Bright Future reveal")
             st.markdown("## 🌟 Your Bright Future")
-            st.markdown("### Explore this profile in a different country")
-
-            selected_country = st.selectbox(
-                "Study destination",
-                ["France", "UK", "Switzerland"],
-                index=["France", "UK", "Switzerland"].index(st.session_state["active_country_focus"]),
-                key="results_country_switcher",
-            )
-            country_changed = selected_country != st.session_state["active_country_focus"]
-            st.session_state["active_country_focus"] = selected_country
-
-            if country_changed:
-                st.session_state["final_ai_text"] = None
-                st.session_state["deep_dive_text"] = None
-
             st.write(
                 "This is your current best-fit direction based on how you think, what you enjoy, "
                 "and what seems to energise you most."
@@ -1118,131 +1166,81 @@ if page == "Start discovery":
                 with metric_cols[i]:
                     st.metric(label=cluster, value=f"{score}%")
 
-            st.markdown("### What your aptitude profile suggests")
-            for cluster, score in top:
-                studies, universities = generate_study_advice(cluster, st.session_state["active_country_focus"])
-                st.markdown(f"**{cluster} — {score}%**")
-                st.write(CAREER_CLUSTERS[cluster]["description"])
-                st.write("Suggested further studies: " + ", ".join(studies[:5]))
-                if universities:
-                    st.write("Starter university ideas: " + ", ".join(universities[:4]))
-
-            score_df = pd.DataFrame(
-                {"Cluster": list(normalized_scores.keys()), "Fit %": list(normalized_scores.values())}
-            ).sort_values("Fit %", ascending=False)
-            st.bar_chart(score_df.set_index("Cluster"))
-
-            st.info("Before jumping to conclusions, explore what these paths actually feel like.")
-
-            if st.button("🔍 Explore these paths deeper"):
-                st.session_state["deep_dive_ready"] = True
-
-            if st.session_state["deep_dive_ready"]:
-                st.subheader("🔍 Explore before deciding")
-                st.write("Click into any path to understand what it's REALLY like.")
-
+            with st.expander("See the fit-zone detail", expanded=False):
                 for cluster, score in top:
-                    if st.button(f"Explore {cluster}", key=f"explore_{cluster}"):
-                        deep_prompt = f"""
-Explain what it is REALLY like to work in {cluster}.
+                    studies, universities = generate_study_advice(cluster, st.session_state["saved_country_focus"])
+                    st.markdown(f"**{cluster} — {score}%**")
+                    st.write(CAREER_CLUSTERS[cluster]["description"])
+                    st.write("Suggested further studies: " + ", ".join(studies[:5]))
+                    if universities:
+                        st.write("Starter university ideas: " + ", ".join(universities[:4]))
 
-Be honest, not idealistic.
+                score_df = pd.DataFrame(
+                    {"Cluster": list(normalized_scores.keys()), "Fit %": list(normalized_scores.values())}
+                ).sort_values("Fit %", ascending=False)
+                st.bar_chart(score_df.set_index("Cluster"))
 
-Include:
-- what people actually do day-to-day
-- what kind of people thrive here
-- what might feel boring or difficult
-- what makes it rewarding
+            with st.expander("Compare with previous results", expanded=False):
+                history_df = get_profile_history(st.session_state["saved_profile_code"])
+                comparison = compare_latest_to_previous(history_df)
 
-Make it engaging and realistic for a teenager.
-"""
-                        try:
-                            response = client.responses.create(
-                                model="gpt-4.1-mini",
-                                input=deep_prompt,
-                            )
-                            st.write(response.output_text)
-                        except Exception as e:
-                            st.error(f"Deep dive failed: {e}")
-
-            st.markdown("## Compare with previous results")
-            history_df = get_profile_history(st.session_state["saved_profile_code"])
-            comparison = compare_latest_to_previous(history_df)
-
-            if comparison is None:
-                st.info("No previous saved result yet for this profile. Save another run later to compare changes over time.")
-            else:
-                st.write(
-                    f"Comparing latest result from **{comparison['latest_date']}** "
-                    f"with previous result from **{comparison['previous_date']}**"
-                )
-                st.dataframe(comparison["comparison_df"], use_container_width=True)
-
-                history_chart_df = build_history_chart_df(history_df)
-                if not history_chart_df.empty:
-                    pivot_df = history_chart_df.pivot(index="created_at", columns="Cluster", values="Fit %")
-                    st.line_chart(pivot_df)
-
-            if not st.session_state.get("final_ai_text"):
-                st.info("Country changed. Click below to regenerate the roadmap for this country.")
-
-            if st.button("Generate roadmap for selected country", key="regenerate_country_ai"):
-                with st.spinner("Building your roadmap..."):
-                    ai_text = get_ai_interpretation(
-                        profile_name=st.session_state["saved_profile_name"],
-                        age=st.session_state["saved_age"],
-                        country_focus=st.session_state["active_country_focus"],
-                        favourite_subjects=st.session_state["saved_favourite_subjects"],
-                        least_subjects=st.session_state["saved_least_subjects"],
-                        dream_day=st.session_state["saved_dream_day"],
-                        answers=st.session_state["saved_answers"],
-                        normalized_scores=st.session_state["saved_normalized_scores"],
-                        respondent_role=st.session_state["saved_respondent_role"],
-                        followup_answers=None,
+                if comparison is None:
+                    st.info("No previous saved result yet for this profile. Save another run later to compare changes over time.")
+                else:
+                    st.write(
+                        f"Comparing latest result from **{comparison['latest_date']}** "
+                        f"with previous result from **{comparison['previous_date']}**"
                     )
-                st.session_state["final_ai_text"] = ai_text
+                    st.dataframe(comparison["comparison_df"], use_container_width=True)
+
+                    history_chart_df = build_history_chart_df(history_df)
+                    if not history_chart_df.empty:
+                        pivot_df = history_chart_df.pivot(index="created_at", columns="Cluster", values="Fit %")
+                        st.line_chart(pivot_df)
 
             if st.session_state.get("final_ai_text"):
-                st.markdown("## Your integrated roadmap")
-                st.write(st.session_state["final_ai_text"])
+                with st.expander("Your integrated roadmap", expanded=True):
+                    st.write(st.session_state["final_ai_text"])
 
-                st.markdown("## Explore this result further")
-                st.write("Pick one area to explore in more depth.")
+                with st.expander("Explore this result further", expanded=False):
+                    st.write("Pick one area to explore in more depth.")
 
-                deep_dive_topic = st.selectbox(
-                    "Choose a topic",
-                    [
-                        "Why this profile fits",
-                        "Best subjects to focus on",
-                        "Higher education options",
-                        "Internship and real-world exposure ideas",
-                        "Skills to build outside school",
-                        "How AI may affect these career directions",
-                        "What to improve over the next year",
-                        "How to choose between two possible paths",
-                    ],
-                    key="deep_dive_topic",
-                )
+                    deep_dive_topic = st.selectbox(
+                        "Choose a topic",
+                        [
+                            "Why this profile fits",
+                            "Best subjects to focus on",
+                            "Higher education options",
+                            "Internship and real-world exposure ideas",
+                            "Skills to build outside school",
+                            "How AI may affect these career directions",
+                            "What to improve over the next year",
+                            "How to choose between two possible paths",
+                            "How super powers or hidden strengths could help",
+                        ],
+                        key="deep_dive_topic",
+                    )
 
-                if st.button("Explore this topic", key="explore_topic"):
-                    with st.spinner("Exploring this topic..."):
-                        deep_dive_text = get_ai_deep_dive(
-                            topic=deep_dive_topic,
-                            profile_name=st.session_state["saved_profile_name"],
-                            age=st.session_state["saved_age"],
-                            country_focus=st.session_state["active_country_focus"],
-                            favourite_subjects=st.session_state["saved_favourite_subjects"],
-                            least_subjects=st.session_state["saved_least_subjects"],
-                            dream_day=st.session_state["saved_dream_day"],
-                            answers=st.session_state["saved_answers"],
-                            normalized_scores=st.session_state["saved_normalized_scores"],
-                            final_ai_text=st.session_state["final_ai_text"],
-                        )
-                    st.session_state["deep_dive_text"] = deep_dive_text
+                    if st.button("Explore this topic", key="explore_topic"):
+                        with st.spinner("Exploring this topic..."):
+                            deep_dive_text = get_ai_deep_dive(
+                                topic=deep_dive_topic,
+                                profile_name=st.session_state["saved_profile_name"],
+                                age=st.session_state["saved_age"],
+                                country_focus=st.session_state["saved_country_focus"],
+                                favourite_subjects=st.session_state["saved_favourite_subjects"],
+                                least_subjects=st.session_state["saved_least_subjects"],
+                                dream_day=st.session_state["saved_dream_day"],
+                                super_powers=st.session_state["saved_super_powers"],
+                                answers=st.session_state["saved_answers"],
+                                normalized_scores=st.session_state["saved_normalized_scores"],
+                                final_ai_text=st.session_state["final_ai_text"],
+                            )
+                        st.session_state["deep_dive_text"] = deep_dive_text
 
-                if st.session_state.get("deep_dive_text"):
-                    st.markdown(f"### Deep dive: {deep_dive_topic}")
-                    st.write(st.session_state["deep_dive_text"])
+                    if st.session_state.get("deep_dive_text"):
+                        st.markdown(f"### Deep dive: {deep_dive_topic}")
+                        st.write(st.session_state["deep_dive_text"])
 
                 st.markdown("---")
                 st.markdown(
@@ -1261,18 +1259,19 @@ else:
             st.warning("No assessments found for that profile code yet.")
         else:
             st.subheader("Responses on file")
-            view_df = df[
-                [
-                    "created_at",
-                    "respondent_name",
-                    "respondent_role",
-                    "relation_weight",
-                    "country_focus",
-                    "favourite_subjects",
-                    "least_favourite_subjects",
-                ]
-            ].copy()
-            st.dataframe(view_df, use_container_width=True)
+            view_cols = [
+                "created_at",
+                "respondent_name",
+                "respondent_role",
+                "relation_weight",
+                "country_focus",
+                "favourite_subjects",
+                "least_favourite_subjects",
+            ]
+            if "super_powers" in df.columns:
+                view_cols.append("super_powers")
+
+            st.dataframe(df[view_cols].copy(), use_container_width=True)
 
             aggregated = aggregate_scores(df)
             if aggregated:
@@ -1280,88 +1279,91 @@ else:
                 st.subheader("Combined best-fit profile")
                 top = top_matches(norm_avg)
 
-                for i, (cluster, score) in enumerate(top, start=1):
-                    studies, universities = generate_study_advice(cluster, df.iloc[0]["country_focus"])
-                    st.markdown(f"### {i}. {cluster} — {score}% fit")
-                    st.write(CAREER_CLUSTERS[cluster]["description"])
-                    st.write("Likely further studies: " + ", ".join(studies[:5]))
-                    if universities:
-                        st.write("Starter university shortlist: " + ", ".join(universities[:4]))
-                    st.write("Career examples: " + ", ".join(CAREER_CLUSTERS[cluster]["examples"]))
-                    st.write("Real-world tests to run next:")
-                    for act in CAREER_CLUSTERS[cluster]["activities"]:
-                        st.write(f"- {act}")
+                with st.expander("See combined fit zones", expanded=True):
+                    for i, (cluster, score) in enumerate(top, start=1):
+                        studies, universities = generate_study_advice(cluster, df.iloc[0]["country_focus"])
+                        st.markdown(f"### {i}. {cluster} — {score}% fit")
+                        st.write(CAREER_CLUSTERS[cluster]["description"])
+                        st.write("Likely further studies: " + ", ".join(studies[:5]))
+                        if universities:
+                            st.write("Starter university shortlist: " + ", ".join(universities[:4]))
+                        st.write("Career examples: " + ", ".join(CAREER_CLUSTERS[cluster]["examples"]))
 
-                score_df = pd.DataFrame(
-                    {"Cluster": list(norm_avg.keys()), "Fit %": list(norm_avg.values())}
-                ).sort_values("Fit %", ascending=False)
-                st.bar_chart(score_df.set_index("Cluster"))
+                    score_df = pd.DataFrame(
+                        {"Cluster": list(norm_avg.keys()), "Fit %": list(norm_avg.values())}
+                    ).sort_values("Fit %", ascending=False)
+                    st.bar_chart(score_df.set_index("Cluster"))
 
-                st.subheader("History and comparison")
-                history_df = get_profile_history(profile_code_lookup.lower().strip())
-                comparison = compare_latest_to_previous(history_df)
+                with st.expander("History and comparison", expanded=False):
+                    history_df = get_profile_history(profile_code_lookup.lower().strip())
+                    comparison = compare_latest_to_previous(history_df)
 
-                if comparison is None:
-                    st.info("No previous saved run yet for this profile.")
-                else:
-                    st.write(
-                        f"Comparing latest result from **{comparison['latest_date']}** "
-                        f"with previous result from **{comparison['previous_date']}**"
-                    )
-                    st.dataframe(comparison["comparison_df"], use_container_width=True)
-
-                history_chart_df = build_history_chart_df(history_df)
-                if not history_chart_df.empty:
-                    pivot_df = history_chart_df.pivot(index="created_at", columns="Cluster", values="Fit %")
-                    st.line_chart(pivot_df)
-
-                st.subheader("AI interpretation of the combined profile")
-
-                combined_answers = {
-                    "note": "This is a combined multi-observer profile. Interpret the weighted score pattern and the open-text inputs from the saved records."
-                }
-
-                combined_favourites = " | ".join(
-                    [str(x) for x in df["favourite_subjects"].dropna().tolist() if str(x).strip()]
-                )
-                combined_least = " | ".join(
-                    [str(x) for x in df["least_favourite_subjects"].dropna().tolist() if str(x).strip()]
-                )
-                combined_dream_day = " | ".join(
-                    [str(x) for x in df["dream_day"].dropna().tolist() if str(x).strip()]
-                )
-
-                if st.button("Generate combined AI interpretation", key="generate_combined_ai"):
-                    with st.spinner("Generating combined AI interpretation..."):
-                        ai_text = get_ai_interpretation(
-                            profile_name=df.iloc[0]["profile_name"],
-                            age=int(df.iloc[0]["target_age"]) if pd.notnull(df.iloc[0]["target_age"]) else 16,
-                            country_focus=df.iloc[0]["country_focus"],
-                            favourite_subjects=combined_favourites,
-                            least_subjects=combined_least,
-                            dream_day=combined_dream_day,
-                            answers=combined_answers,
-                            normalized_scores=norm_avg,
-                            respondent_role="Combined profile",
-                            followup_answers=None,
+                    if comparison is None:
+                        st.info("No previous saved run yet for this profile.")
+                    else:
+                        st.write(
+                            f"Comparing latest result from **{comparison['latest_date']}** "
+                            f"with previous result from **{comparison['previous_date']}**"
                         )
-                    st.write(ai_text)
+                        st.dataframe(comparison["comparison_df"], use_container_width=True)
 
-                st.subheader("What to do next")
-                st.markdown(
-                    """
-                    1. Take the top 2 or 3 clusters seriously, not just the top 1.
-                    2. Test each one with a real activity, shadowing experience, or short project.
-                    3. Re-run the assessment after that exposure. Teenagers change fast; their clarity improves with evidence.
-                    4. Build the university shortlist only after the career clusters and preferred subjects start to stabilise.
-                    """
-                )
+                    history_chart_df = build_history_chart_df(history_df)
+                    if not history_chart_df.empty:
+                        pivot_df = history_chart_df.pivot(index="created_at", columns="Cluster", values="Fit %")
+                        st.line_chart(pivot_df)
 
-                st.subheader("Raw data export")
-                csv = df.to_csv(index=False).encode("utf-8")
-                st.download_button(
-                    "Download profile data (CSV)",
-                    data=csv,
-                    file_name=f"{profile_code_lookup}_career_profile.csv",
-                    mime="text/csv",
-                )
+                with st.expander("AI interpretation of the combined profile", expanded=False):
+                    combined_answers = {
+                        "note": "This is a combined multi-observer profile. Interpret the weighted score pattern and the open-text inputs from the saved records."
+                    }
+
+                    combined_favourites = " | ".join(
+                        [str(x) for x in df["favourite_subjects"].dropna().tolist() if str(x).strip()]
+                    )
+                    combined_least = " | ".join(
+                        [str(x) for x in df["least_favourite_subjects"].dropna().tolist() if str(x).strip()]
+                    )
+                    combined_dream_day = " | ".join(
+                        [str(x) for x in df["dream_day"].dropna().tolist() if str(x).strip()]
+                    )
+                    combined_super_powers = ""
+                    if "super_powers" in df.columns:
+                        combined_super_powers = " | ".join(
+                            [str(x) for x in df["super_powers"].dropna().tolist() if str(x).strip()]
+                        )
+
+                    if st.button("Generate combined AI interpretation", key="generate_combined_ai"):
+                        with st.spinner("Generating combined AI interpretation..."):
+                            ai_text = get_ai_interpretation(
+                                profile_name=df.iloc[0]["profile_name"],
+                                age=int(df.iloc[0]["target_age"]) if pd.notnull(df.iloc[0]["target_age"]) else 16,
+                                country_focus=df.iloc[0]["country_focus"],
+                                favourite_subjects=combined_favourites,
+                                least_subjects=combined_least,
+                                dream_day=combined_dream_day,
+                                super_powers=combined_super_powers,
+                                answers=combined_answers,
+                                normalized_scores=norm_avg,
+                                respondent_role="Combined profile",
+                                followup_answers=None,
+                            )
+                        st.write(ai_text)
+
+                with st.expander("What to do next", expanded=False):
+                    st.markdown(
+                        """
+                        1. Take the top 2 or 3 clusters seriously, not just the top 1.
+                        2. Test each one with a real activity, shadowing experience, or short project.
+                        3. Re-run the assessment after that exposure. Teenagers change fast; their clarity improves with evidence.
+                        4. Build the university shortlist only after the career clusters and preferred subjects start to stabilise.
+                        """
+                    )
+
+                with st.expander("Raw data export", expanded=False):
+                    csv = df.to_csv(index=False).encode("utf-8")
+                    st.download_button(
+                        "Download profile data (CSV)",
+                        data=csv,
+                        file_name=f"{profile_code_lookup}_career_profile.csv",
+                        mime="text/csv",
+                    )
