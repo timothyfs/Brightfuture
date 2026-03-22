@@ -9,11 +9,8 @@ DB_PATH = os.getenv("DB_PATH", "/tmp/career_bot.db")
 OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY", None)
 client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
-
 def get_connection():
     return sqlite3.connect(DB_PATH, check_same_thread=False)
-
-
 
 st.set_page_config(page_title="Bright Future", page_icon="✨", layout="wide")
 
@@ -23,7 +20,6 @@ def login_screen():
 
     if st.button("Log in with Google"):
         st.login()
-
 
 # --- AUTH GATE ---
 if not st.user.is_logged_in:
