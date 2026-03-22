@@ -264,7 +264,7 @@ def build_pdf_report(title, sections):
 
 def get_connection():
     return sqlite3.connect(DB_PATH, check_same_thread=False)
-
+language = st.sidebar.selectbox("Language / Langue", ["English", "Français"])
 st.set_page_config(page_title="Bright Future", page_icon="✨", layout="wide")
 
 def login_screen():
