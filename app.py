@@ -1254,6 +1254,16 @@ def render_reveal_section(normalized_scores, country_focus, final_ai_text, super
         else:
             st.info("Your roadmap will appear here after the AI interpretation is generated.")
 
+    next_steps = next_steps_suggestions(top, country_focus)
+    with st.expander("🎯 What to do next", expanded=True):
+        st.write(next_steps["headline"])
+        st.markdown("**What to focus on at school**")
+        st.write(next_steps["subjects"])
+        st.markdown("**One practical next move**")
+        st.write(next_steps["actions"])
+        st.markdown("**Places to explore**")
+        st.write(f"Look at environments such as {next_steps['organisations']}.")
+
     with st.expander("📘 See the full fit-zone detail", expanded=False):
         for cluster, score in top:
             studies, universities = generate_study_advice(cluster, country_focus)
@@ -1267,6 +1277,65 @@ def render_reveal_section(normalized_scores, country_focus, final_ai_text, super
             {"Cluster": list(normalized_scores.keys()), "Fit %": list(normalized_scores.values())}
         ).sort_values("Fit %", ascending=False)
         st.bar_chart(score_df.set_index("Cluster"))
+
+
+
+def next_steps_suggestions(top_clusters, country_focus):
+    subject_map = {
+        "Engineering & Technology": "Focus on maths, physics, coding, and problem-solving projects.",
+        "Research & Analysis": "Focus on analytical subjects like maths, sciences, economics, and structured writing.",
+        "Creative & Design": "Build your portfolio through art, design, writing, media, and visual storytelling.",
+        "People, Health & Education": "Strengthen biology, psychology, communication, and people-facing experience.",
+        "Business, Law & Leadership": "Build communication, writing, debate, and commercial awareness.",
+        "Operations, Finance & Project Delivery": "Strengthen maths, organisation, reliability, and spreadsheet confidence.",
+    }
+
+    action_map = {
+        "Engineering & Technology": "Try one hands-on project such as coding a simple app, robotics, CAD, or electronics.",
+        "Research & Analysis": "Run a mini research project, analyse a dataset, or write a short evidence-based brief.",
+        "Creative & Design": "Create something visible: a portfolio piece, short film, poster series, brand concept, or writing sample.",
+        "People, Health & Education": "Try tutoring, volunteering, mentoring, or interviewing someone in education or healthcare.",
+        "Business, Law & Leadership": "Join debate, pitch an idea, help organise an event, or follow a business/news topic each week.",
+        "Operations, Finance & Project Delivery": "Plan something end-to-end, build a simple budget, or improve a process in a spreadsheet.",
+    }
+
+    org_map = {
+        "Engineering & Technology": ["Airbus", "Dassault Systèmes", "Thales", "Capgemini Engineering"],
+        "Research & Analysis": ["INSEE", "OECD", "think tanks", "research labs"],
+        "Creative & Design": ["Ubisoft", "LVMH", "design studios", "media agencies"],
+        "People, Health & Education": ["schools", "hospitals", "charities", "community organisations"],
+        "Business, Law & Leadership": ["startups", "consulting firms", "law firms", "student enterprise groups"],
+        "Operations, Finance & Project Delivery": ["operations teams", "banks", "supply-chain firms", "project offices"],
+    }
+
+    steps = []
+    if not top_clusters:
+        return {
+            "headline": "Keep exploring and notice what gives you energy.",
+            "subjects": "Pay attention to the subjects where effort feels most natural.",
+            "actions": "Try one small project and reflect on what felt enjoyable or draining.",
+            "organisations": "Look for one organisation or environment that matches your curiosity."
+        }
+
+    primary = top_clusters[0][0]
+    secondary = top_clusters[1][0] if len(top_clusters) > 1 else None
+
+    headline = f"Use {primary} as your main direction to test next."
+    if secondary:
+        headline = f"Use {primary} as your main direction, while keeping an eye on {secondary} as a strong secondary path."
+
+    subjects = subject_map.get(primary, "Focus on the subjects that feel both energising and sustainable.")
+    actions = action_map.get(primary, "Try one real-world project connected to this direction.")
+    organisations = ", ".join(org_map.get(primary, ["companies", "organisations", "teams", "studios"]))
+
+    return {
+        "headline": headline,
+        "subjects": subjects,
+        "actions": actions,
+        "organisations": organisations,
+    }
+
+
 
 
 init_db()
@@ -1678,64 +1747,11 @@ if page == "Start discovery":
 
 else:
     card_start("Journey", "My Journey", "Revisit earlier runs, compare how your thinking changes, and reopen past roadmaps.")
-
     user_email = current_user_email()
     history_df = load_user_assessment_history(user_email)
 
     if history_df.empty:
         st.info("You have no saved journey entries yet. Start a discovery first.")
-        card_end()
-        st.stop()
-
-    history_df = history_df.copy()
-    history_df = history_df.sort_values("created_at", ascending=False)
-
-    st.markdown("### Your journey so far")
-
-    for _, row in history_df.iterrows():
-        role = row["respondent_role"] if pd.notnull(row["respondent_role"]) and str(row["respondent_role"]).strip() else "Unknown role"
-        title = f"{row['created_at']} — {role}"
-
-        preview = ""
-        if pd.notnull(row["favourite_subjects"]) and str(row["favourite_subjects"]).strip():
-            preview = str(row["favourite_subjects"])
-        elif pd.notnull(row["dream_day"]) and str(row["dream_day"]).strip():
-            preview = str(row["dream_day"])
-
-        with st.expander(f"📅 {title}", expanded=False):
-            if preview:
-                st.markdown(f"**Snapshot:** {preview}")
-
-            st.markdown("#### Details")
-
-            if pd.notnull(row["profile_name"]):
-                st.write(f"**Name:** {row['profile_name']}")
-            if pd.notnull(row["country_focus"]):
-                st.write(f"**Country focus:** {row['country_focus']}")
-            if pd.notnull(row["favourite_subjects"]):
-                st.write(f"**Favourite subjects:** {row['favourite_subjects']}")
-            if pd.notnull(row["dream_day"]):
-                st.write(f"**Ideal working day:** {row['dream_day']}")
-
-            with st.expander("Score pattern", expanded=False):
-                try:
-                    scores = json.loads(row["normalized_scores"]) if row["normalized_scores"] else {}
-                    if scores:
-                        score_df = pd.DataFrame(
-                            {"Cluster": list(scores.keys()), "Fit %": list(scores.values())}
-                        ).sort_values("Fit %", ascending=False)
-                        st.bar_chart(score_df.set_index("Cluster"))
-                    else:
-                        st.info("No score data for this entry.")
-                except Exception:
-                    st.info("Could not read score data.")
-
-            with st.expander("AI roadmap", expanded=False):
-                if pd.notnull(row["final_ai_text"]) and str(row["final_ai_text"]).strip():
-                    st.write(row["final_ai_text"])
-                else:
-                    st.info("No saved roadmap for this entry.")
-
         card_end()
         st.stop()
 
