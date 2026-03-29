@@ -1672,6 +1672,8 @@ if "deep_dive_text" not in st.session_state:
     st.session_state["deep_dive_text"] = None
 if "saved_created_at" not in st.session_state:
     st.session_state["saved_created_at"] = None
+if "followup_questions" not in st.session_state:
+    st.session_state["followup_questions"] = []
 
 render_hero()
 st.markdown(
@@ -1838,7 +1840,7 @@ if page == tr(language, "start_discovery"):
     qcols = st.columns(1)
     for idx, q in enumerate(QUESTIONS):
         with qcols[0]:
-            answers[q["key"]] = st.slider(q["label"], 1, 5, 3, key=f"{respondent_role}_{q['key']}_{idx}")
+            answers[q["key"]] = st.slider(q["label"], 1, 5, 3, key=f"base_question_{q['key']}")
 
     st.subheader(tr(language, "context_header"))
     favourite_subjects = st.text_input(tr(language, "fav_subjects"), placeholder="e.g. Maths, Biology, Art")
@@ -1876,6 +1878,7 @@ if page == tr(language, "start_discovery"):
                 "saved_normalized_scores",
                 "saved_respondent_role",
                 "saved_created_at",
+                "followup_questions",
             ]:
                 st.session_state.pop(key, None)
             st.rerun()
@@ -1942,6 +1945,18 @@ if page == tr(language, "start_discovery"):
             st.session_state["saved_answers"] = answers
             st.session_state["saved_normalized_scores"] = normalized_scores
             st.session_state["saved_respondent_role"] = respondent_role
+            st.session_state["followup_questions"] = get_ai_followup_questions(
+                profile_name=profile_name,
+                age=age,
+                country_focus=country_focus,
+                favourite_subjects=favourite_subjects,
+                least_subjects=least_subjects,
+                dream_day=dream_day,
+                super_powers=super_powers,
+                answers=answers,
+                normalized_scores=normalized_scores,
+                output_language=language,
+            )
 
     if st.session_state.get("show_results"):
         normalized_scores = st.session_state["saved_normalized_scores"]
@@ -1965,23 +1980,27 @@ if page == tr(language, "start_discovery"):
                 card_end()
                 st.stop()
 
-            followup_questions = get_ai_followup_questions(
-                profile_name=st.session_state["saved_profile_name"],
-                age=st.session_state["saved_age"],
-                country_focus=st.session_state["saved_country_focus"],
-                favourite_subjects=st.session_state["saved_favourite_subjects"],
-                least_subjects=st.session_state["saved_least_subjects"],
-                dream_day=st.session_state["saved_dream_day"],
-                super_powers=st.session_state["saved_super_powers"],
-                answers=saved_answers,
-                normalized_scores=normalized_scores,
-            )
+            followup_questions = st.session_state.get("followup_questions", [])
+            if not followup_questions:
+                followup_questions = get_ai_followup_questions(
+                    profile_name=st.session_state["saved_profile_name"],
+                    age=st.session_state["saved_age"],
+                    country_focus=st.session_state["saved_country_focus"],
+                    favourite_subjects=st.session_state["saved_favourite_subjects"],
+                    least_subjects=st.session_state["saved_least_subjects"],
+                    dream_day=st.session_state["saved_dream_day"],
+                    super_powers=st.session_state["saved_super_powers"],
+                    answers=saved_answers,
+                    normalized_scores=normalized_scores,
+                    output_language=language,
+                )
+                st.session_state["followup_questions"] = followup_questions
 
             followup_answers = {}
             for i, question in enumerate(followup_questions, start=1):
                 followup_answers[f"q{i}"] = st.text_area(
                     f"{i}. {question}",
-                    key=f"followup_{st.session_state['saved_profile_code']}_{i}",
+                    key=f"followup_q{i}",
                 )
 
             if st.button(tr(language, "reveal_btn"), key="generate_ai"):
@@ -2007,6 +2026,7 @@ if page == tr(language, "start_discovery"):
                             normalized_scores=normalized_scores,
                             respondent_role=st.session_state["saved_respondent_role"],
                             followup_answers=followup_answers,
+                            output_language=language,
                         )
                     st.session_state["final_ai_text"] = ai_text
                     update_assessment_ai_text(
